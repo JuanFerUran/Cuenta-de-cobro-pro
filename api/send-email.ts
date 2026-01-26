@@ -16,20 +16,23 @@ export default async function handler(
     return res.status(400).json({ message: 'Missing required fields' });
   }
 
-  // Validation: Check env variables
-  const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, FROM_NAME } = process.env;
+  // Diagnostic: Check missing variables
+  const requiredVars = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'];
+  const missing = requiredVars.filter(v => !process.env[v]);
 
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+  if (missing.length > 0) {
     return res.status(500).json({ 
       success: false, 
-      message: 'Servidor no configurado correctamente (Variables de entorno faltantes).' 
+      message: `Configuración incompleta. Faltan variables: ${missing.join(', ')}. Agrégalas en Vercel y haz Redeploy.` 
     });
   }
+
+  const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, FROM_NAME } = process.env;
 
   try {
     const transporter = nodemailer.createTransport({
       host: SMTP_HOST,
-      port: parseInt(SMTP_PORT || '587'),
+      port: parseInt(SMTP_PORT || '465'),
       secure: SMTP_SECURE === 'true',
       auth: {
         user: SMTP_USER,
@@ -38,7 +41,7 @@ export default async function handler(
     });
 
     await transporter.sendMail({
-      from: `"${FROM_NAME || 'Facturación'}" <${SMTP_USER}>`,
+      from: `"${FROM_NAME || 'Facturación Axyra'}" <${SMTP_USER}>`,
       to,
       subject,
       text,
@@ -54,6 +57,9 @@ export default async function handler(
     return res.status(200).json({ success: true, message: 'Correo enviado correctamente' });
   } catch (error: any) {
     console.error('SMTP Error:', error);
-    return res.status(500).json({ success: false, message: error.message || 'Error al enviar el correo' });
+    return res.status(500).json({ 
+      success: false, 
+      message: `Error de conexión SMTP: ${error.message}. Revisa el Host, Puerto y Contraseña.` 
+    });
   }
 }
