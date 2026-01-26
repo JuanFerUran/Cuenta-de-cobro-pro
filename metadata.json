@@ -1,0 +1,5 @@
+{
+  "name": "Cuentas de Cobro",
+  "description": "Aplicación profesional para generar, descargar y enviar cuentas de cobro en formato PDF para Colombia, con previsualización en tiempo real y envío por correo electrónico.",
+  "requestFramePermissions": []
+}
