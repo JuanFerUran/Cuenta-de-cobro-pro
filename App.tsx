@@ -31,7 +31,7 @@ const App: React.FC = () => {
   const [status, setStatus] = useState<AppStatus>(AppStatus.EDITING);
   const [errors, setErrors] = useState<string[]>([]);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
-  const [showToast, setShowToast] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
+  const [showToast, setShowToast] = useState<{msg: string, type: 'success' | 'error' | 'info'} | null>(null);
 
   useEffect(() => {
     localStorage.setItem('axyra_invoice_state_v4', JSON.stringify(state));
@@ -47,16 +47,16 @@ const App: React.FC = () => {
       newErrors.push("El formato del email es inválido.");
     }
     if (!state.invoiceDetails.concepto || state.invoiceDetails.concepto.length < 5) {
-      newErrors.push("El concepto debe ser más descriptivo (mín. 5 caracteres).");
+      newErrors.push("El concepto debe ser más descriptivo.");
     }
-    if (state.invoiceDetails.valor <= 0) newErrors.push("El valor a cobrar debe ser mayor a cero.");
-    if (!state.bankData.numero) newErrors.push("Falta el número de cuenta bancaria.");
+    if (state.invoiceDetails.valor <= 0) newErrors.push("El valor debe ser mayor a cero.");
+    if (!state.bankData.numero) newErrors.push("Falta el número de cuenta.");
 
     setErrors(newErrors);
     
     if (newErrors.length > 0) {
-      setShowToast({ msg: "Datos incompletos. Revisa el formulario.", type: 'error' });
-      setTimeout(() => setShowToast(null), 4000);
+      setShowToast({ msg: "Completa los campos obligatorios", type: 'error' });
+      setTimeout(() => setShowToast(null), 3000);
       return false;
     }
     return true;
@@ -69,7 +69,7 @@ const App: React.FC = () => {
   };
 
   const handleClear = () => {
-    if (window.confirm('¿Deseas resetear los datos del cliente?')) {
+    if (window.confirm('¿Deseas reiniciar los datos del cliente?')) {
       setState(prev => ({
         ...prev,
         clientData: DEFAULT_CLIENT_DATA,
@@ -82,7 +82,12 @@ const App: React.FC = () => {
 
   const handleGenerateAiConcept = async () => {
     if (!state.invoiceDetails.concepto || state.invoiceDetails.concepto.length < 3) {
-      setShowToast({ msg: "Escribe una idea corta primero", type: 'error' });
+      setShowToast({ msg: "Escribe una descripción breve primero", type: 'info' });
+      return;
+    }
+
+    if (!process.env.API_KEY) {
+      setShowToast({ msg: "API Key no configurada. Revisa Vercel.", type: 'error' });
       return;
     }
 
@@ -91,16 +96,18 @@ const App: React.FC = () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Eres un redactor profesional de cuentas de cobro. Mejora este concepto para que sea formal y directo (máximo 15 palabras). Solo devuelve el texto mejorado: "${state.invoiceDetails.concepto}"`,
+        contents: `Eres un experto en facturación colombiana. Reescribe de forma ultra-profesional y formal este concepto de cobro (máximo 20 palabras): "${state.invoiceDetails.concepto}"`,
       });
       
-      if (response.text) {
-        handleUpdate('invoiceDetails', { ...state.invoiceDetails, concepto: response.text.trim() });
-        setShowToast({ msg: "Texto optimizado con IA", type: 'success' });
+      const text = response.text;
+      if (text) {
+        handleUpdate('invoiceDetails', { ...state.invoiceDetails, concepto: text.trim() });
+        setShowToast({ msg: "¡Concepto profesionalizado!", type: 'success' });
         setTimeout(() => setShowToast(null), 2000);
       }
     } catch (err) {
-      setShowToast({ msg: "Error con la IA. Revisa tu API Key.", type: 'error' });
+      console.error("Gemini Error:", err);
+      setShowToast({ msg: "Error al conectar con la IA", type: 'error' });
     } finally {
       setIsAiGenerating(false);
     }
@@ -111,10 +118,10 @@ const App: React.FC = () => {
     try {
       const doc = await generatePDF(state);
       downloadPDF(doc, state.invoiceDetails.numero);
-      setShowToast({ msg: "PDF generado y descargado", type: 'success' });
+      setShowToast({ msg: "Documento descargado", type: 'success' });
       setTimeout(() => setShowToast(null), 3000);
     } catch (err) {
-      setShowToast({ msg: "Error al generar PDF", type: 'error' });
+      setShowToast({ msg: "Error al generar el PDF", type: 'error' });
     }
   };
 
@@ -124,7 +131,7 @@ const App: React.FC = () => {
       const doc = await generatePDF(state);
       printPDF(doc);
     } catch (err) {
-      setShowToast({ msg: "Error al abrir impresión", type: 'error' });
+      setShowToast({ msg: "Error al intentar imprimir", type: 'error' });
     }
   };
 
@@ -146,7 +153,8 @@ const App: React.FC = () => {
 
       if (response.success) {
         setStatus(AppStatus.SENT);
-        setShowToast({ msg: "¡Cuenta enviada al cliente con éxito!", type: 'success' });
+        setShowToast({ msg: "Correo enviado al cliente", type: 'success' });
+        // Incrementar número de factura para el próximo uso
         const parts = state.invoiceDetails.numero.split('-');
         if (parts.length === 3) {
           const num = parseInt(parts[2]) + 1;
@@ -165,47 +173,43 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8FAFC]">
+    <div className="min-h-screen flex flex-col bg-[#F1F5F9]">
+      {/* Notificaciones */}
       {showToast && (
-        <div className={`fixed top-24 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce border ${
-          showToast.type === 'success' ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-rose-500 text-white border-rose-400'
+        <div className={`fixed top-8 left-1/2 -translate-x-1/2 z-[300] px-5 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border ${
+          showToast.type === 'success' ? 'bg-slate-900 text-emerald-400 border-emerald-900/30' : 
+          showToast.type === 'error' ? 'bg-slate-900 text-rose-400 border-rose-900/30' : 
+          'bg-slate-900 text-blue-400 border-blue-900/30'
         }`}>
-          <i className={`fas ${showToast.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'}`}></i>
-          <p className="font-bold text-sm tracking-tight">{showToast.msg}</p>
+          <i className={`fas ${showToast.type === 'success' ? 'fa-check-circle' : showToast.type === 'error' ? 'fa-triangle-exclamation' : 'fa-info-circle'}`}></i>
+          <p className="font-bold text-xs uppercase tracking-widest">{showToast.msg}</p>
         </div>
       )}
 
-      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-[110] shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="bg-slate-900 p-2 rounded-xl shadow-lg shadow-slate-200">
-            <i className="fas fa-bolt text-blue-400"></i>
+      {/* Header Minimalista */}
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5 flex items-center justify-between sticky top-0 z-[150]">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
+            <i className="fas fa-bolt-lightning text-white text-lg"></i>
           </div>
-          <h1 className="text-xl font-black text-slate-900 tracking-tighter uppercase">AXYRA <span className="font-medium text-slate-400">| Pro</span></h1>
+          <div>
+            <h1 className="text-xl font-black text-slate-900 tracking-tighter flex items-center gap-2">
+              AXYRA <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] tracking-normal">VERSION PRO</span>
+            </h1>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Infraestructura de Pagos CO</p>
+          </div>
         </div>
         
-        <div className="flex items-center gap-4">
-           {status !== AppStatus.EDITING && (
-              <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                status === AppStatus.SENT ? 'bg-emerald-100 text-emerald-700' :
-                status === AppStatus.ERROR ? 'bg-rose-100 text-rose-700' :
-                'bg-blue-100 text-blue-700'
-              }`}>
-                {status}
-              </span>
-           )}
-           <button onClick={handleClear} className="text-slate-400 hover:text-rose-500 text-xs font-bold uppercase transition-colors">
-             <i className="fas fa-sync-alt mr-1"></i> Reiniciar
+        <div className="flex items-center gap-6">
+           <button onClick={handleClear} className="text-slate-400 hover:text-slate-900 text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2">
+             <i className="fas fa-arrow-rotate-left"></i> Limpiar Campos
            </button>
         </div>
       </header>
 
-      <main className="flex-1 container mx-auto p-4 lg:p-8 flex flex-col lg:flex-row gap-8">
-        <div className="w-full lg:w-[45%] order-1">
-          <div className="mb-8">
-             <h2 className="text-2xl font-black text-slate-900 tracking-tight">Estructura del Cobro</h2>
-             <p className="text-slate-500 text-sm">Asegúrate de que todos los campos obligatorios estén llenos.</p>
-          </div>
-
+      <main className="flex-1 container mx-auto p-4 lg:p-12 flex flex-col lg:flex-row gap-12 max-w-[1600px]">
+        {/* Formulario a la izquierda */}
+        <div className="w-full lg:w-[45%] xl:w-[40%]">
           <InvoiceForm 
             state={state} 
             onUpdate={handleUpdate} 
@@ -218,36 +222,33 @@ const App: React.FC = () => {
             onAiConcept={handleGenerateAiConcept}
             errors={errors}
           />
-          
-          {errors.length > 0 && (
-            <div className="mt-6 p-5 bg-rose-50 border border-rose-100 rounded-3xl">
-               <h4 className="text-rose-800 font-black text-xs uppercase tracking-widest mb-3 flex items-center gap-2">
-                 <i className="fas fa-triangle-exclamation"></i> Requerido para continuar:
-               </h4>
-               <ul className="space-y-2">
-                 {errors.map((err, i) => (
-                   <li key={i} className="text-rose-600 text-[11px] font-bold flex items-center gap-2">
-                     <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
-                     {err}
-                   </li>
-                 ))}
-               </ul>
-            </div>
-          )}
         </div>
 
-        <div className="w-full lg:w-[55%] order-2">
-          <div className="sticky top-24">
-            <h2 className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em] mb-4 px-2">Documento Final (Previsualización)</h2>
-            <div className="bg-slate-200 p-4 lg:p-10 rounded-[2.5rem] shadow-inner border-8 border-white overflow-hidden">
-              <Preview state={state} />
+        {/* Preview a la derecha */}
+        <div className="w-full lg:w-[55%] xl:w-[60%] order-first lg:order-last">
+          <div className="sticky top-28">
+            <div className="mb-6 flex items-center justify-between px-4">
+               <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Vista previa del documento</h3>
+               <div className="flex gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+               </div>
+            </div>
+            {/* Contenedor del PDF con aspecto de escritorio */}
+            <div className="bg-slate-300/50 p-6 lg:p-12 rounded-[3rem] border-8 border-white shadow-2xl shadow-slate-300/50 overflow-auto max-h-[85vh] scrollbar-hide">
+              <div className="transform origin-top transition-transform duration-500">
+                <Preview state={state} />
+              </div>
             </div>
           </div>
         </div>
       </main>
 
-      <footer className="bg-white border-t border-slate-200 py-8 text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-        AXYRA SOLUTIONS &copy; {new Date().getFullYear()} | INFRAESTRUCTURA DE PAGOS COLOMBIA
+      <footer className="py-12 text-center">
+        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em]">
+          &copy; {new Date().getFullYear()} AXYRA SOLUTIONS S.A.S | BOGOTÁ, COLOMBIA
+        </p>
       </footer>
     </div>
   );
