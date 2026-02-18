@@ -31,12 +31,12 @@ export default async function handler(
       return;
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     
     if (!apiKey) {
       res.status(500).json({ 
         success: false, 
-        error: 'API key no configurada. Verifica Environment Variables en Vercel.' 
+        error: 'GROQ_API_KEY no configurada. Agrégala en Vercel Settings → Environment Variables' 
       });
       return;
     }
@@ -47,34 +47,28 @@ export default async function handler(
       proposal: `Eres un experto en redacción de propuestas comerciales. Mejora esta descripción de PROPUESTA para que sea convincente y profesional (máximo 50 palabras): "${text}"`
     };
 
-    // Usar API REST con endpoint correcto
-    const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-01-21:generateContent',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: prompts[documentType]
-            }]
-          }],
-          generationConfig: {
-            temperature: 1,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 200,
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'mixtral-8x7b-32768',
+        messages: [
+          {
+            role: 'user',
+            content: prompts[documentType]
           }
-        })
-      }
-    );
+        ],
+        temperature: 0.7,
+        max_tokens: 200,
+      })
+    });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Google API Error:', errorData);
+      console.error('Groq API Error:', errorData);
       res.status(response.status).json({ 
         success: false, 
         error: errorData?.error?.message || `Error: ${response.status}` 
@@ -83,7 +77,7 @@ export default async function handler(
     }
 
     const data = await response.json();
-    const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const resultText = data?.choices?.[0]?.message?.content;
 
     if (!resultText) {
       res.status(500).json({ 
