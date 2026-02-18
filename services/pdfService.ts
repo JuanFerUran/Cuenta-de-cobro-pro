@@ -45,109 +45,184 @@ export const generatePDF = async (state: AppState): Promise<jsPDF> => {
   const { myData, clientData, bankData, invoiceDetails, branding } = state;
   const primaryRGB = hexToRgb(branding.primaryColor);
   const accentRGB = hexToRgb(branding.accentColor);
+  let currentY = 10;
 
-  // 1. Logo removido - documento sin branding
+  // 1. Top color bar
+  doc.setFillColor(accentRGB[0], accentRGB[1], accentRGB[2]);
+  doc.rect(0, 0, 210, 2, 'F');
+  currentY = 10;
 
-  // 2. Header Bar
-  doc.setDrawColor(primaryRGB[0], primaryRGB[1], primaryRGB[2]);
-  doc.setLineWidth(0.5);
-  doc.line(20, 45, 190, 45);
-
-  // 3. My Info
+  // 2. Header section - left side (emisor)
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
-  doc.setTextColor(primaryRGB[0], primaryRGB[1], primaryRGB[2]);
-  doc.text(myData.nombre.toUpperCase(), 20, 55);
+  doc.setTextColor(15, 23, 42);
+  doc.text(myData.nombre.toUpperCase(), 20, currentY);
   
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
-  doc.text(myData.documento, 20, 61);
-  doc.text(`Tel: ${myData.telefono}`, 20, 66);
-  doc.text(myData.direccion, 20, 71);
-
-  // 4. CC Title
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
+  doc.setFontSize(9);
   doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
-  doc.text(`${branding.documentTitle} ${branding.documentSubtitle}`.toUpperCase(), 190, 30, { align: 'right' });
+  doc.text(myData.documento, 20, currentY + 6);
+  
+  // 3. Header section - right side (título y número)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(15, 23, 42);
+  const titleText = `${branding.documentTitle} ${branding.documentSubtitle}`.toUpperCase();
+  doc.text(titleText, 190, currentY, { align: 'right' });
   
   doc.setFillColor(primaryRGB[0], primaryRGB[1], primaryRGB[2]);
-  doc.roundedRect(150, 35, 40, 8, 1, 1, 'F');
-  doc.setFontSize(10);
-  doc.setTextColor(255, 255, 255);
-  doc.text(`No. ${invoiceDetails.numero}`, 170, 40.5, { align: 'center' });
-
-  // Dates
-  doc.setFontSize(8);
-  doc.setTextColor(148, 163, 184);
-  doc.text(`EMISIÓN: ${invoiceDetails.fechaEmision}`, 190, 55, { align: 'right' });
-  doc.text(`VENCIMIENTO: ${invoiceDetails.fechaVencimiento}`, 190, 60, { align: 'right' });
-
-  // 5. Client Box
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(20, 85, 170, 20, 2, 2, 'F');
+  doc.rect(150, currentY + 5, 40, 7, 'F');
   doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(255, 255, 255);
+  doc.text(`No. ${invoiceDetails.numero}`, 170, currentY + 9.5, { align: 'center' });
+  
+  // Dates
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Emisión: ${invoiceDetails.fechaEmision}`, 190, currentY + 15, { align: 'right' });
+  
+  currentY += 25;
+
+  // 4. Contact info
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
-  doc.text('CLIENTE / DEUDOR:', 25, 91);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Tel: ${myData.telefono}`, 20, currentY);
+  doc.text(`${myData.direccion}`, 20, currentY + 5);
+  
+  currentY += 15;
+
+  // 5. Client and Total section (2 columns)
+  // Left: Client info
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.5);
+  doc.rect(20, currentY, 80, 20);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(100, 116, 139);
+  doc.text('PAGADOR / CLIENTE', 25, currentY + 3);
+  
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(15, 23, 42);
-  doc.text(clientData.nombre || 'N/A', 25, 98);
+  doc.text(clientData.nombre || 'Nombre del cliente', 25, currentY + 10);
+  
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text(`NIT/CC: ${clientData.nit || 'N/A'}`, 25, 103);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`NIT/CC: ${clientData.nit || '---'}`, 25, currentY + 16);
 
-  // 6. Table
-  const tableY = 115;
+  // Right: Total
+  doc.setFillColor(accentRGB[0], accentRGB[1], accentRGB[2]);
+  doc.rect(105, currentY, 95, 20, 'F');
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(255, 255, 255);
+  doc.text('TOTAL NETO A PAGAR', 190, currentY + 3, { align: 'right' });
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(255, 255, 255);
+  doc.text(formatCurrency(invoiceDetails.valor), 190, currentY + 13, { align: 'right' });
+  
+  currentY += 28;
+
+  // 6. Service description table
+  // Header
   doc.setFillColor(primaryRGB[0], primaryRGB[1], primaryRGB[2]);
-  doc.rect(20, tableY, 170, 8, 'F');
+  doc.rect(20, currentY, 170, 7, 'F');
+  
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(255, 255, 255);
-  doc.text('DESCRIPCIÓN DEL SERVICIO', 25, tableY + 5.5);
-  doc.text('TOTAL', 185, tableY + 5.5, { align: 'right' });
-
+  doc.text('DESCRIPCIÓN DEL SERVICIO PRESTADO', 25, currentY + 4.5);
+  
+  currentY += 7;
+  
+  // Body
+  doc.setLineWidth(0.3);
+  doc.setDrawColor(220, 220, 220);
+  doc.rect(20, currentY, 170, 40);
+  
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(51, 65, 85);
-  const splitConcept = doc.splitTextToSize(invoiceDetails.concepto || "Sin descripción", 130);
-  doc.text(splitConcept, 25, tableY + 18);
+  const splitConcept = doc.splitTextToSize(invoiceDetails.concepto || 'Pendiente por definir descripción.', 160);
+  doc.text(splitConcept, 25, currentY + 5);
+  
+  currentY += 48;
 
+  // 7. Payment and signature section
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.3);
+  doc.line(20, currentY, 190, currentY);
+  currentY += 5;
+
+  // Payment info - Left
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(0, 0, 0);
-  doc.text(formatCurrency(invoiceDetails.valor), 185, tableY + 18, { align: 'right' });
-
-  // 7. Footer Payment
-  const footerY = 220;
-  doc.setDrawColor(226, 232, 240);
-  doc.line(20, footerY, 190, footerY);
+  doc.setFontSize(7);
+  doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
+  doc.text('DATOS PARA EL PAGO', 20, currentY);
+  
+  currentY += 4;
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.3);
+  doc.rect(20, currentY, 80, 18);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(15, 23, 42);
+  doc.text(bankData.banco, 25, currentY + 3);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Cuenta ${bankData.tipo}:`, 25, currentY + 8);
   
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
-  doc.text('DATOS DE PAGO:', 20, footerY + 10);
+  doc.text(bankData.numero, 25, currentY + 12);
   
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`${bankData.banco} - Cuenta de ${bankData.tipo}`, 20, footerY + 16);
-  doc.text(`No. de cuenta: ${bankData.numero}`, 20, footerY + 21);
-  doc.text(`Titular: ${bankData.titular}`, 20, footerY + 26);
-
-  // Total highlighting
-  doc.setFontSize(10);
-  doc.setTextColor(100, 116, 139);
-  doc.text('TOTAL A PAGAR:', 190, footerY + 10, { align: 'right' });
-  doc.setFontSize(18);
-  doc.setTextColor(primaryRGB[0], primaryRGB[1], primaryRGB[2]);
-  doc.text(formatCurrency(invoiceDetails.valor), 190, footerY + 20, { align: 'right' });
-
-  // Legal
   doc.setFontSize(7);
-  doc.setTextColor(148, 163, 184);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Titular: ${bankData.titular}`, 25, currentY + 16);
+
+  // Signature - Right
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.3);
+  doc.line(105, currentY + 10, 140, currentY + 10);
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(15, 23, 42);
+  doc.text(myData.nombre, 185, currentY + 13, { align: 'right' });
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Firma Digitalizada', 185, currentY + 16, { align: 'right' });
+
+  currentY += 25;
+
+  // 8. Footer text
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6);
+  doc.setTextColor(150, 150, 150);
   const footerLines = doc.splitTextToSize(branding.footerText, 140);
-  doc.text(footerLines, 105, 280, { align: 'center' });
+  doc.text(footerLines, 105, currentY, { align: 'center' });
+  
+  currentY += footerLines.length * 3 + 2;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
+  doc.text(`Generado por ${myData.nombre}`, 105, currentY, { align: 'center' });
 
   return doc;
 };
