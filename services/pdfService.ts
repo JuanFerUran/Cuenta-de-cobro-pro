@@ -10,6 +10,15 @@ const formatCurrency = (val: number) => {
   }).format(val);
 };
 
+const hexToRgb = (hex: string): [number, number, number] => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? [
+    parseInt(result[1], 16),
+    parseInt(result[2], 16),
+    parseInt(result[3], 16)
+  ] : [0, 0, 0];
+};
+
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
   try {
     const res = await fetch(url);
@@ -33,9 +42,9 @@ export const generatePDF = async (state: AppState): Promise<jsPDF> => {
     format: 'a4'
   });
 
-  const { myData, clientData, bankData, invoiceDetails } = state;
-  const primaryRGB = [15, 23, 42]; // Slate 900
-  const accentRGB = [59, 130, 246]; // Blue 500
+  const { myData, clientData, bankData, invoiceDetails, branding } = state;
+  const primaryRGB = hexToRgb(branding.primaryColor);
+  const accentRGB = hexToRgb(branding.accentColor);
 
   // 1. Logo removido - documento sin branding
 
