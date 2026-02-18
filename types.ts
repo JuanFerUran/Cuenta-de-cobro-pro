@@ -36,6 +36,8 @@ export interface BrandingConfig {
   footerText: string;
   logoUrl: string;
   logoBackground: string;
+  columnLayout: 'single' | 'double';
+  subtotalPosition: 'side' | 'bottom';
 }
 
 export interface AppState {

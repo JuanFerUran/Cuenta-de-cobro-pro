@@ -86,7 +86,9 @@ const Preview: React.FC<Props> = ({ state }) => {
             <thead>
               <tr className="text-white text-[9px] font-black uppercase tracking-widest" style={primaryBgStyle}>
                 <th className="py-4 px-6">Descripción del Servicio Prestado</th>
-                <th className="py-4 px-6 text-right w-40">Subtotal</th>
+                {branding.subtotalPosition === 'side' && (
+                  <th className="py-4 px-6 text-right w-40">Subtotal</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -94,10 +96,19 @@ const Preview: React.FC<Props> = ({ state }) => {
                 <td className="py-12 px-6 text-[13px] text-slate-700 leading-relaxed font-semibold bg-white">
                   {invoiceDetails.concepto || 'Pendiente por definir descripción.'}
                 </td>
-                <td className="py-12 px-6 text-right font-black text-xl text-slate-950 bg-slate-50/30">
-                  {formatCurrency(invoiceDetails.valor)}
-                </td>
+                {branding.subtotalPosition === 'side' && (
+                  <td className="py-12 px-6 text-right font-black text-xl text-slate-950 bg-slate-50/30">
+                    {formatCurrency(invoiceDetails.valor)}
+                  </td>
+                )}
               </tr>
+              {branding.subtotalPosition === 'bottom' && (
+                <tr>
+                  <td colSpan={1} className="py-6 px-6 text-right font-black text-xl text-slate-950 bg-slate-50/30 border-t border-slate-100">
+                    Subtotal: {formatCurrency(invoiceDetails.valor)}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

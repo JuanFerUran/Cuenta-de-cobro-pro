@@ -1,0 +1,12 @@
+{
+  "buildCommand": "npm run build",
+  "env": {
+    "GEMINI_API_KEY": "@gemini_api_key"
+  },
+  "redirects": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ]
+}

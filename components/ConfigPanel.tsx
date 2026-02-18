@@ -191,6 +191,39 @@ const ConfigPanel: React.FC<Props> = ({ config, onConfigChange }) => {
               </div>
 
               {/* Pie de Página */}
+              <div className="space-y-3 pb-4 border-b border-slate-200">
+                <h3 className="text-[10px] font-black text-slate-500 uppercase">Diseño del Documento</h3>
+                <div>
+                  <label className="text-[9px] font-bold text-slate-600 uppercase block mb-2">
+                    Distribución de Contenido
+                  </label>
+                  <select
+                    value={config.columnLayout}
+                    onChange={(e) => handleChange('columnLayout', e.target.value as 'single' | 'double')}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold focus:border-blue-600 outline-none"
+                  >
+                    <option value="single">Una columna (Normal)</option>
+                    <option value="double">Dos columnas (Libro)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Posición del subtotal */}
+              <div className="space-y-3 pb-4 border-b border-slate-200">
+                <label className="text-[9px] font-bold text-slate-600 uppercase block">
+                  Posición del Subtotal
+                </label>
+                <select
+                  value={config.subtotalPosition}
+                  onChange={(e) => handleChange('subtotalPosition', e.target.value as 'side' | 'bottom')}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold focus:border-blue-600 outline-none"
+                >
+                  <option value="side">Al lado (Compacto)</option>
+                  <option value="bottom">Abajo (Para textos largos)</option>
+                </select>
+              </div>
+
+              {/* Pie de Página */}
               <div className="space-y-3">
                 <h3 className="text-[10px] font-black text-slate-500 uppercase">Pie de Página</h3>
                 <div>

@@ -13,7 +13,6 @@ import Preview from './components/Preview';
 import ConfigPanel from './components/ConfigPanel';
 import { generatePDF, downloadPDF, printPDF } from './services/pdfService';
 import { sendEmail } from './services/emailService';
-import { GoogleGenAI } from "@google/genai";
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
@@ -96,21 +95,27 @@ const App: React.FC = () => {
 
     setIsAiGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Eres un experto en redacción corporativa colombiana. Mejora este concepto de cobro para que sea formal, profesional y directo (máximo 25 palabras): "${state.invoiceDetails.concepto}"`,
+      const response = await fetch('/api/generate-description', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: state.invoiceDetails.concepto,
+          documentType: 'invoice'
+        })
       });
-      
-      const resultText = response.text;
-      if (resultText) {
-        handleUpdate('invoiceDetails', { ...state.invoiceDetails, concepto: resultText.trim() });
-        setShowToast({ msg: "Texto optimizado con IA", type: 'success' });
+
+      const data = await response.json();
+
+      if (data.success && data.result) {
+        handleUpdate('invoiceDetails', { ...state.invoiceDetails, concepto: data.result.trim() });
+        setShowToast({ msg: "✨ Texto optimizado con IA", type: 'success' });
         setTimeout(() => setShowToast(null), 2000);
+      } else {
+        setShowToast({ msg: data.error || "Error al generar con IA", type: 'error' });
       }
     } catch (err) {
-      console.error("Gemini Error:", err);
-      setShowToast({ msg: "Error de IA. Asegúrate de configurar la API_KEY y hacer Redeploy.", type: 'error' });
+      console.error("Generation error:", err);
+      setShowToast({ msg: "Error de conexión. Verifica tu conexión a internet.", type: 'error' });
     } finally {
       setIsAiGenerating(false);
     }

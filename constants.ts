@@ -8,7 +8,9 @@ export const DEFAULT_BRANDING: BrandingConfig = {
   accentColor: '#3b82f6',
   footerText: 'Este documento cumple con los requisitos del Art. 774 del código de comercio.',
   logoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/><polyline points="14 2 14 8 20 8"/></svg>',
-  logoBackground: '#1e293b'
+  logoBackground: '#1e293b',
+  columnLayout: 'single',
+  subtotalPosition: 'bottom'
 };
 
 export const DEFAULT_MY_DATA: MyData = {
