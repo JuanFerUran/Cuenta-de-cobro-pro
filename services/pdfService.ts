@@ -70,7 +70,7 @@ export const generatePDF = async (state: AppState): Promise<jsPDF> => {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(22);
   doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
-  doc.text('CUENTA DE COBRO', 190, 30, { align: 'right' });
+  doc.text(`${branding.documentTitle} ${branding.documentSubtitle}`.toUpperCase(), 190, 30, { align: 'right' });
   
   doc.setFillColor(primaryRGB[0], primaryRGB[1], primaryRGB[2]);
   doc.roundedRect(150, 35, 40, 8, 1, 1, 'F');
@@ -146,7 +146,8 @@ export const generatePDF = async (state: AppState): Promise<jsPDF> => {
   // Legal
   doc.setFontSize(7);
   doc.setTextColor(148, 163, 184);
-  doc.text('Esta cuenta de cobro se asimila en sus efectos legales a una factura de venta (Art. 774 del Código de Comercio).', 105, 280, { align: 'center' });
+  const footerLines = doc.splitTextToSize(branding.footerText, 140);
+  doc.text(footerLines, 105, 280, { align: 'center' });
 
   return doc;
 };
