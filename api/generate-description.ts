@@ -23,7 +23,10 @@ export default async function handler(
   try {
     const { text, documentType = 'invoice' } = req.body as RequestBody;
 
+    console.log('Request received:', { text: text?.substring(0, 50), documentType });
+
     if (!text || text.trim().length < 3) {
+      console.log('Text validation failed');
       res.status(400).json({ 
         success: false, 
         error: 'El texto debe tener al menos 3 caracteres' 
@@ -32,9 +35,10 @@ export default async function handler(
     }
 
     const apiKey = process.env.GROQ_API_KEY;
+    console.log('API Key check:', apiKey ? 'Present' : 'MISSING');
     
     if (!apiKey) {
-      res.status(500).json({ 
+      res.status(400).json({ 
         success: false, 
         error: 'GROQ_API_KEY no configurada. Agrégala en Vercel Settings → Environment Variables' 
       });
