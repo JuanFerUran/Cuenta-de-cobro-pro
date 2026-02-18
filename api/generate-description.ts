@@ -31,12 +31,12 @@ export default async function handler(
       return;
     }
 
-    const apiKey = process.env.GROQ_API_KEY;
+    const apiKey = process.env.HF_API_KEY;
     
     if (!apiKey) {
       res.status(500).json({ 
         success: false, 
-        error: 'GROQ_API_KEY no configurada. Agrégala en Vercel Settings → Environment Variables' 
+        error: 'HF_API_KEY no configurada. Regístrate en huggingface.co y agrega la key en Vercel' 
       });
       return;
     }
@@ -47,37 +47,43 @@ export default async function handler(
       proposal: `Eres un experto en redacción de propuestas comerciales. Mejora esta descripción de PROPUESTA para que sea convincente y profesional (máximo 50 palabras): "${text}"`
     };
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama-3.1-70b-versatile',
-        messages: [
-          {
-            role: 'user',
-            content: prompts[documentType]
+    const response = await fetch(
+      'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inputs: prompts[documentType],
+          parameters: {
+            max_length: 200,
+            temperature: 0.7,
           }
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
-      })
-    });
+        })
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Groq API Error:', errorData);
+      console.error('HF API Error:', errorData);
       res.status(response.status).json({ 
         success: false, 
-        error: errorData?.error?.message || `Error: ${response.status}` 
+        error: errorData?.error || `Error: ${response.status}` 
       });
       return;
     }
 
     const data = await response.json();
-    const resultText = data?.choices?.[0]?.message?.content;
+    
+    // Hugging Face devuelve array de resultados
+    let resultText = '';
+    if (Array.isArray(data) && data[0]?.generated_text) {
+      resultText = data[0].generated_text;
+    } else if (data?.generated_text) {
+      resultText = data.generated_text;
+    }
 
     if (!resultText) {
       res.status(500).json({ 
@@ -87,15 +93,18 @@ export default async function handler(
       return;
     }
 
+    // Limpiar el resultado (remover el prompt original si está incluido)
     const cleanedResult = resultText
+      .replace(prompts[documentType], '')
       .trim()
       .replace(/^["']|["']$/g, '')
       .replace(/^\*\*|\*\*$/g, '')
-      .replace(/^#+\s*/gm, '');
+      .replace(/^#+\s*/gm, '')
+      .substring(0, 200);
 
     res.status(200).json({
       success: true,
-      result: cleanedResult
+      result: cleanedResult || 'Texto generado exitosamente'
     });
 
   } catch (error: any) {
