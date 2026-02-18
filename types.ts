@@ -28,12 +28,23 @@ export interface InvoiceDetails {
   observaciones: string;
 }
 
+export interface BrandingConfig {
+  documentTitle: string;
+  documentSubtitle: string;
+  primaryColor: string;
+  accentColor: string;
+  footerText: string;
+  logoEmoji: string;
+  logoBackground: string;
+}
+
 export interface AppState {
   myData: MyData;
   clientData: ClientData;
   bankData: BankData;
   invoiceDetails: InvoiceDetails;
   editMyData: boolean;
+  branding: BrandingConfig;
 }
 
 export enum AppStatus {

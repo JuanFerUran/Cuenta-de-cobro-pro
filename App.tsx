@@ -4,11 +4,13 @@ import {
   DEFAULT_MY_DATA, 
   DEFAULT_BANK_DATA, 
   DEFAULT_INVOICE_DETAILS, 
-  DEFAULT_CLIENT_DATA 
+  DEFAULT_CLIENT_DATA,
+  DEFAULT_BRANDING
 } from './constants';
 import { AppState, AppStatus } from './types';
 import InvoiceForm from './components/InvoiceForm';
 import Preview from './components/Preview';
+import ConfigPanel from './components/ConfigPanel';
 import { generatePDF, downloadPDF, printPDF } from './services/pdfService';
 import { sendEmail } from './services/emailService';
 import { GoogleGenAI } from "@google/genai";
@@ -17,14 +19,20 @@ const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
     const saved = localStorage.getItem('axyra_invoice_state_v4');
     if (saved) {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      // Asegurar que branding existe (para compatibilidad con datos antiguos)
+      return {
+        ...parsed,
+        branding: parsed.branding || DEFAULT_BRANDING
+      };
     }
     return {
       myData: DEFAULT_MY_DATA,
       clientData: DEFAULT_CLIENT_DATA,
       bankData: DEFAULT_BANK_DATA,
       invoiceDetails: DEFAULT_INVOICE_DETAILS,
-      editMyData: false
+      editMyData: false,
+      branding: DEFAULT_BRANDING
     };
   });
 
@@ -249,6 +257,11 @@ const App: React.FC = () => {
           &copy; AXYRA SOLUTIONS S.A.S | INFRAESTRUCTURA LEGAL
         </p>
       </footer>
+
+      <ConfigPanel 
+        config={state.branding}
+        onConfigChange={(branding) => handleUpdate('branding', branding)}
+      />
     </div>
   );
 };

@@ -1,5 +1,15 @@
 
-import { MyData, BankData, InvoiceDetails, ClientData } from './types';
+import { MyData, BankData, InvoiceDetails, ClientData, BrandingConfig } from './types';
+
+export const DEFAULT_BRANDING: BrandingConfig = {
+  documentTitle: 'Cuenta de',
+  documentSubtitle: 'Cobro',
+  primaryColor: '#0f172a',
+  accentColor: '#3b82f6',
+  footerText: 'Este documento cumple con los requisitos del Art. 774 del código de comercio.',
+  logoEmoji: '📄',
+  logoBackground: '#1e293b'
+};
 
 export const DEFAULT_MY_DATA: MyData = {
   nombre: 'NOMBRE DEL PRESTADOR',
