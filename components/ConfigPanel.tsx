@@ -147,24 +147,44 @@ const ConfigPanel: React.FC<Props> = ({ config, onConfigChange }) => {
               <div className="space-y-3 pb-4 border-b border-slate-200">
                 <h3 className="text-[10px] font-black text-slate-500 uppercase">Logo/Icono</h3>
                 <div>
-                  <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">
-                    URL de Imagen PNG
+                  <label className="text-[9px] font-bold text-slate-600 uppercase block mb-2">
+                    Subir Imagen PNG/JPG
                   </label>
-                  <input
-                    type="text"
-                    value={config.logoUrl}
-                    onChange={(e) => handleChange('logoUrl', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono focus:border-blue-600 outline-none"
-                    placeholder="https://ejemplo.com/logo.png"
-                  />
+                  <label className="flex items-center justify-center w-full px-4 py-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition">
+                    <div className="text-center">
+                      <i className="fas fa-cloud-upload-alt text-slate-400 text-lg mb-1 block"></i>
+                      <span className="text-[9px] font-bold text-slate-600">Haz clic para subir</span>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            const result = event.target?.result as string;
+                            handleChange('logoUrl', result);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </label>
                   {config.logoUrl && (
-                    <div className="mt-3 flex items-center justify-center p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <div className="mt-3 flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
                       <img 
                         src={config.logoUrl} 
                         alt="Logo preview" 
-                        className="max-w-[60px] max-h-[60px] object-contain"
-                        onError={() => {}}
+                        className="max-w-[50px] max-h-[50px] object-contain"
                       />
+                      <button
+                        onClick={() => handleChange('logoUrl', 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/><polyline points="14 2 14 8 20 8"/></svg>')}
+                        className="text-[9px] font-bold text-red-600 hover:text-red-700 uppercase"
+                      >
+                        <i className="fas fa-trash mr-1"></i> Eliminar
+                      </button>
                     </div>
                   )}
                 </div>
