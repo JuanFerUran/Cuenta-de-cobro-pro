@@ -34,11 +34,11 @@ const Preview: React.FC<Props> = ({ state }) => {
       <div className="px-12 py-12 flex justify-between items-start">
         <div className="space-y-4">
           <div className="flex items-center gap-4">
-             <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg text-2xl" style={logoBackgroundStyle}>
+             <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg p-1.5" style={logoBackgroundStyle}>
                 <img 
                   src={branding.logoUrl} 
                   alt="Logo" 
-                  className="w-10 h-10 object-contain"
+                  className="w-full h-full object-contain"
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = 'none';
                   }}
