@@ -120,4 +120,10 @@ const Preview: React.FC<Props> = ({ state }) => {
           <p className="text-[8px] text-slate-400 leading-relaxed font-bold uppercase tracking-tight max-w-sm mx-auto">
             {branding.footerText}
           </p>
-          <p className="text-[10px] font-black mt-2 uppercase tracking-[0.2em]" style={accentColorStyle}>Generado por {myData.nombre}</p>
+          <p className="text-[10px] font-black mt-2 uppercase tracking-[0.2em]" style={accentColorStyle}>Generado por {myData.nombre}</p>        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Preview;
