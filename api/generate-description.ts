@@ -47,33 +47,37 @@ export default async function handler(
       proposal: `Eres un experto en redacción de propuestas comerciales. Mejora esta descripción de PROPUESTA para que sea convincente y profesional (máximo 50 palabras): "${text}"`
     };
 
+    // Usar API REST con endpoint correcto
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`,
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-01-21:generateContent',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
         },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: prompts[documentType]
-                }
-              ]
-            }
-          ]
+          contents: [{
+            parts: [{
+              text: prompts[documentType]
+            }]
+          }],
+          generationConfig: {
+            temperature: 1,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 200,
+          }
         })
       }
     );
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({}));
       console.error('Google API Error:', errorData);
       res.status(response.status).json({ 
         success: false, 
-        error: errorData?.error?.message || 'Error en la API de Google' 
+        error: errorData?.error?.message || `Error: ${response.status}` 
       });
       return;
     }
