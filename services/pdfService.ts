@@ -104,10 +104,9 @@ export const generatePDF = async (state: AppState): Promise<jsPDF> => {
   // 4. Client (left) and Total (right) - 2 columns
   const colWidth = (contentWidth / 2) - 3;
 
-  // Left: Client box
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(200, 200, 200);
-  doc.rect(marginX, currentY, colWidth, 18);
+  // Left: Client box - solo fondo gris claro, sin borde
+  doc.setFillColor(240, 240, 240);
+  doc.rect(marginX, currentY, colWidth, 18, 'F');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
@@ -153,10 +152,9 @@ export const generatePDF = async (state: AppState): Promise<jsPDF> => {
 
   currentY += 6;
 
-  // Body
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(200, 200, 200);
-  doc.rect(marginX, currentY, contentWidth, 35);
+  // Body - sin borde
+  doc.setFillColor(240, 240, 240);
+  doc.rect(marginX, currentY, contentWidth, 35, 'F');
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
@@ -168,7 +166,7 @@ export const generatePDF = async (state: AppState): Promise<jsPDF> => {
 
   // 6. Payment data (left) and signature (right)
   // Separator line
-  doc.setLineWidth(0.3);
+  doc.setLineWidth(0.2);
   doc.setDrawColor(200, 200, 200);
   doc.line(marginX, currentY, pageWidth - marginX, currentY);
   currentY += 5;
@@ -181,9 +179,9 @@ export const generatePDF = async (state: AppState): Promise<jsPDF> => {
 
   currentY += 4;
 
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(200, 200, 200);
-  doc.rect(marginX, currentY, colWidth, 16);
+  // Payment box - solo fondo, sin borde
+  doc.setFillColor(240, 240, 240);
+  doc.rect(marginX, currentY, colWidth, 16, 'F');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
@@ -207,7 +205,7 @@ export const generatePDF = async (state: AppState): Promise<jsPDF> => {
 
   // Right: Signature
   // Signature line
-  doc.setLineWidth(0.3);
+  doc.setLineWidth(0.2);
   doc.setDrawColor(200, 200, 200);
   doc.line(marginX + colWidth + 10, currentY + 8, marginX + colWidth + 30, currentY + 8);
 
