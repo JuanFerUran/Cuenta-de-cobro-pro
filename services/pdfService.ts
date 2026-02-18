@@ -37,11 +37,7 @@ export const generatePDF = async (state: AppState): Promise<jsPDF> => {
   const primaryRGB = [15, 23, 42]; // Slate 900
   const accentRGB = [59, 130, 246]; // Blue 500
 
-  // 1. Intentar cargar logo, si falla no bloquea la ejecución
-  const logoBase64 = await getBase64ImageFromUrl('/logo.png');
-  if (logoBase64 && logoBase64.startsWith('data:image')) {
-    doc.addImage(logoBase64, 'PNG', 20, 15, 25, 25);
-  }
+  // 1. Logo removido - documento sin branding
 
   // 2. Header Bar
   doc.setDrawColor(primaryRGB[0], primaryRGB[1], primaryRGB[2]);
@@ -142,8 +138,6 @@ export const generatePDF = async (state: AppState): Promise<jsPDF> => {
   doc.setFontSize(7);
   doc.setTextColor(148, 163, 184);
   doc.text('Esta cuenta de cobro se asimila en sus efectos legales a una factura de venta (Art. 774 del Código de Comercio).', 105, 280, { align: 'center' });
-  doc.setFont('helvetica', 'bold');
-  doc.text('AXYRA SOLUTIONS - GENERADO PROFESIONALMENTE', 105, 285, { align: 'center' });
 
   return doc;
 };
