@@ -145,19 +145,28 @@ const ConfigPanel: React.FC<Props> = ({ config, onConfigChange }) => {
 
               {/* Logo */}
               <div className="space-y-3 pb-4 border-b border-slate-200">
-                <h3 className="text-[10px] font-black text-slate-500 uppercase">Logo/Ícono</h3>
+                <h3 className="text-[10px] font-black text-slate-500 uppercase">Logo/Icono</h3>
                 <div>
                   <label className="text-[9px] font-bold text-slate-600 uppercase block mb-1">
-                    Emoji o Símbolo
+                    URL de Imagen PNG
                   </label>
                   <input
                     type="text"
-                    value={config.logoEmoji}
-                    onChange={(e) => handleChange('logoEmoji', e.target.value)}
-                    maxLength={2}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-2xl text-center focus:border-blue-600 outline-none"
-                    placeholder="📄"
+                    value={config.logoUrl}
+                    onChange={(e) => handleChange('logoUrl', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono focus:border-blue-600 outline-none"
+                    placeholder="https://ejemplo.com/logo.png"
                   />
+                  {config.logoUrl && (
+                    <div className="mt-3 flex items-center justify-center p-3 bg-slate-50 rounded-lg border border-slate-100">
+                      <img 
+                        src={config.logoUrl} 
+                        alt="Logo preview" 
+                        className="max-w-[60px] max-h-[60px] object-contain"
+                        onError={() => {}}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

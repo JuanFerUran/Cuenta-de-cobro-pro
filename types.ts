@@ -34,7 +34,7 @@ export interface BrandingConfig {
   primaryColor: string;
   accentColor: string;
   footerText: string;
-  logoEmoji: string;
+  logoUrl: string;
   logoBackground: string;
 }
 

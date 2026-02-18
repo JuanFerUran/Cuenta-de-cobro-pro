@@ -35,7 +35,14 @@ const Preview: React.FC<Props> = ({ state }) => {
         <div className="space-y-4">
           <div className="flex items-center gap-4">
              <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg text-2xl" style={logoBackgroundStyle}>
-                {branding.logoEmoji}
+                <img 
+                  src={branding.logoUrl} 
+                  alt="Logo" 
+                  className="w-10 h-10 object-contain"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  }}
+                />
              </div>
              <div>
                 <h2 className="text-xl font-black uppercase tracking-tight text-slate-950 leading-none">{myData.nombre}</h2>
