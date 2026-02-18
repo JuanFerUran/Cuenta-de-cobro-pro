@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 interface RequestBody {
   text: string;
@@ -12,11 +12,11 @@ interface ResponseData {
 }
 
 export default async function handler(
-  req: any,
-  res: any
+  req: VercelRequest,
+  res: VercelResponse<ResponseData>
 ): Promise<void> {
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
+    res.status(405).json({ success: false, error: 'Method not allowed' });
     return;
   }
 
@@ -31,29 +31,59 @@ export default async function handler(
       return;
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     
     if (!apiKey) {
       res.status(500).json({ 
         success: false, 
-        error: 'API key no configurada en el servidor' 
+        error: 'API key no configurada. Verifica Environment Variables en Vercel.' 
       });
       return;
     }
 
     const prompts: Record<string, string> = {
       invoice: `Eres un experto en redacción corporativa colombiana. Mejora esta descripción de CUENTA DE COBRO para que sea formal, profesional y directa (máximo 30 palabras): "${text}"`,
-      quotation: `Eres un experto en redacción comercial colombiana. Mejora esta descripción de COTIZACIÓN para que sea clara, professional y atractiva (máximo 40 palabras): "${text}"`,
+      quotation: `Eres un experto en redacción comercial colombiana. Mejora esta descripción de COTIZACIÓN para que sea clara, profesional y atractiva (máximo 40 palabras): "${text}"`,
       proposal: `Eres un experto en redacción de propuestas comerciales. Mejora esta descripción de PROPUESTA para que sea convincente y profesional (máximo 50 palabras): "${text}"`
     };
 
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: prompts[documentType]
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: prompts[documentType]
+                }
+              ]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 150,
+          }
+        })
+      }
+    );
 
-    const resultText = response.text;
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Google API Error:', errorData);
+      res.status(response.status).json({ 
+        success: false, 
+        error: errorData?.error?.message || 'Error en la API de Google' 
+      });
+      return;
+    }
+
+    const data = await response.json();
+    const resultText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!resultText) {
       res.status(500).json({ 
@@ -66,12 +96,13 @@ export default async function handler(
     const cleanedResult = resultText
       .trim()
       .replace(/^["']|["']$/g, '')
-      .replace(/^[*_]+|[*_]+$/g, '');
+      .replace(/^\*\*|\*\*$/g, '')
+      .replace(/^#+\s*/gm, '');
 
     res.status(200).json({
       success: true,
       result: cleanedResult
-    } as ResponseData);
+    });
 
   } catch (error: any) {
     console.error('Generation error:', error);
@@ -79,6 +110,6 @@ export default async function handler(
     res.status(500).json({
       success: false,
       error: error?.message || 'Error al generar descripción'
-    } as ResponseData);
+    });
   }
 }
