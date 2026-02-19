@@ -1,7 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { AppState } from '../types';
-import exportPreviewAsPdf from '../services/exportDomPdf';
+import exportPreviewAsPdf, { ExportOptions } from '../services/exportDomPdf';
 
 interface Props {
   state: AppState;
@@ -64,12 +64,10 @@ const Preview: React.FC<Props> = ({ state }) => {
             No. {invoiceDetails.numero}
           </div>
           <div className="mt-3">
-            <button
-              onClick={() => exportPreviewAsPdf('invoice-preview', `cuenta-${invoiceDetails.numero}.pdf`)}
-              className="text-[12px] font-bold px-4 py-2 rounded-lg border border-slate-200 bg-white hover:shadow"
-            >
-              Exportar exacto
-            </button>
+            <ExportModalTrigger
+              numero={invoiceDetails.numero}
+              onExport={(opts) => exportPreviewAsPdf('invoice-preview', `cuenta-${invoiceDetails.numero}.pdf`, opts)}
+            />
           </div>
           <div className="mt-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">
             Emisión: {invoiceDetails.fechaEmision}
@@ -154,3 +152,76 @@ const Preview: React.FC<Props> = ({ state }) => {
 };
 
 export default Preview;
+
+// Simple modal trigger component placed here to avoid new file overhead
+function ExportModalTrigger({
+  numero,
+  onExport
+}: {
+  numero: string | number;
+  onExport: (opts: ExportOptions) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [scale, setScale] = useState<number>(3);
+  const [multipage, setMultipage] = useState<boolean>(true);
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(true)}
+        className="text-[12px] font-bold px-4 py-2 rounded-lg border border-slate-200 bg-white hover:shadow"
+      >
+        Exportar exacto
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg p-6 w-[360px]">
+            <h3 className="text-lg font-bold mb-3">Opciones de exportación</h3>
+
+            <div className="mb-3">
+              <label className="block text-sm font-bold mb-1">Resolución (scale)</label>
+              <select
+                value={scale}
+                onChange={(e) => setScale(Number(e.target.value))}
+                className="w-full border p-2 rounded"
+              >
+                <option value={2}>2 (rápido - buena)</option>
+                <option value={2.5}>2.5 (equilibrado)</option>
+                <option value={3}>3 (máxima nitidez)</option>
+              </select>
+            </div>
+
+            <div className="mb-4 flex items-center gap-3">
+              <input
+                id="mp"
+                type="checkbox"
+                checked={multipage}
+                onChange={(e) => setMultipage(e.target.checked)}
+              />
+              <label htmlFor="mp" className="text-sm font-bold">Permitir multipágina</label>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setOpen(false)}
+                className="px-3 py-2 rounded border"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  onExport({ scale, multipage });
+                }}
+                className="px-3 py-2 rounded bg-accent-500 text-white font-bold"
+              >
+                Exportar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
