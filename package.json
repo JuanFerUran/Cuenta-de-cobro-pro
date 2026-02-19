@@ -13,6 +13,8 @@
     "react-dom": "^19.2.3",
     "jspdf": "^4.0.0",
     "html2canvas": "^1.4.1",
+    "puppeteer-core": "^20.7.2",
+    "chrome-aws-lambda": "^10.1.0",
     "nodemailer": "^7.0.12",
     "@vercel/node": "^5.5.27",
     "@google/genai": "^1.38.0"
