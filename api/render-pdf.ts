@@ -1,6 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import chromium from 'chrome-aws-lambda';
-import puppeteer from 'puppeteer-core';
 
 // POST /api/render-pdf
 // Body: { state: AppState, url?: string }
@@ -23,8 +22,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let browser = null;
   try {
     const executablePath = await chromium.executablePath;
-    browser = await puppeteer.launch({
-      args: chromium.args,
+    console.log('chromium.executablePath ->', executablePath);
+    // Use chromium.puppeteer to avoid mismatched puppeteer-core versions
+    browser = await chromium.puppeteer.launch({
+      args: chromium.args.concat(['--disable-dev-shm-usage', '--no-sandbox']),
       defaultViewport: chromium.defaultViewport,
       executablePath: executablePath || undefined,
       headless: chromium.headless,
