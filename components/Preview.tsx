@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppState } from '../types';
 import exportPreviewAsPdf, { ExportOptions } from '../services/exportDomPdf';
 
@@ -27,8 +27,31 @@ const Preview: React.FC<Props> = ({ state }) => {
     boxShadow: `0 20px 25px -5px ${branding.accentColor}20`
   };
 
+  const [printMode, setPrintMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const pm = localStorage.getItem('axyra_pdf_print_mode');
+      if (pm === '1' || pm === 'true') setPrintMode(true);
+    } catch (e) {}
+  }, []);
+
+  // A4 width in CSS pixels (approx at 96dpi)
+  const a4PxWidth = Math.round((210 * 96) / 25.4);
+
+  const rootStyle: React.CSSProperties = printMode
+    ? {
+        width: `${a4PxWidth}px`,
+        maxWidth: `${a4PxWidth}px`,
+        margin: '0 auto',
+        boxShadow: 'none',
+        transform: 'none'
+      }
+    : {};
+
   return (
-    <div id="invoice-preview" className="a4-preview flex flex-col font-sans text-slate-800 bg-white mx-auto overflow-hidden relative shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] border border-slate-200 rounded-sm">
+    <div id="invoice-preview" style={rootStyle} className="a4-preview flex flex-col font-sans text-slate-800 bg-white mx-auto overflow-hidden relative shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] border border-slate-200 rounded-sm">
       {/* Línea Superior con color dinámico */}
       <div className="h-2 w-full" style={accentBgStyle}></div>
       

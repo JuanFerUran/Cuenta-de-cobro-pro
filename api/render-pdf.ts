@@ -41,6 +41,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }, JSON.stringify(state));
     }
 
+    // Signal the app to render the preview at full A4 dimensions
+    await page.evaluateOnNewDocument(() => {
+      try {
+        localStorage.setItem('axyra_pdf_print_mode', '1');
+      } catch (e) {}
+    });
+
     const pageWidthMM = 210;
     const cssDpi = 96; // CSS pixels per inch baseline
     const pxWidth = Math.round((pageWidthMM * cssDpi) / 25.4);
