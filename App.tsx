@@ -124,9 +124,19 @@ const App: React.FC = () => {
   const handleDownload = async () => {
     if (!validate()) return;
     try {
-      const doc = await generatePDF(state);
-      downloadPDF(doc, state.invoiceDetails.numero);
-      setShowToast({ msg: "PDF descargado", type: 'success' });
+      // Server-side render to get pixel-perfect PDF
+      const res = await fetch('/api/render-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, url: window.location.origin })
+      });
+      if (!res.ok) throw new Error('Error al generar PDF en servidor');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${state.invoiceDetails.numero}.pdf`; document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      setShowToast({ msg: 'PDF descargado', type: 'success' });
       setTimeout(() => setShowToast(null), 2500);
     } catch (err) {
       setShowToast({ msg: "Error al generar PDF", type: 'error' });
@@ -136,8 +146,15 @@ const App: React.FC = () => {
   const handlePrint = async () => {
     if (!validate()) return;
     try {
-      const doc = await generatePDF(state);
-      printPDF(doc);
+      const res = await fetch('/api/render-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, url: window.location.origin })
+      });
+      if (!res.ok) throw new Error('Error al generar PDF en servidor');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
     } catch (err) {
       setShowToast({ msg: "Error al abrir impresión", type: 'error' });
     }
@@ -148,15 +165,23 @@ const App: React.FC = () => {
 
     setStatus(AppStatus.SENDING);
     try {
-      const doc = await generatePDF(state);
-      const pdfBase64 = doc.output('datauristring').split(',')[1];
-      
+      // Render PDF on server and send as base64
+      const res = await fetch('/api/render-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, url: window.location.origin })
+      });
+      if (!res.ok) throw new Error('Error al generar PDF en servidor');
+      const arrayBuffer = await res.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuffer);
+      const b64 = bufferToBase64(uint8);
+
       const response = await sendEmail({
         to: state.clientData.email,
         subject: `Cuenta de Cobro ${state.invoiceDetails.numero} - ${state.myData.nombre}`,
         text: `Buen día,\n\nAdjunto envío la cuenta de cobro No. ${state.invoiceDetails.numero}.\n\nCordialmente,\n${state.myData.nombre}`,
         filename: `${state.invoiceDetails.numero}.pdf`,
-        pdfBase64
+        pdfBase64: b64
       });
 
       if (response.success) {
@@ -178,6 +203,17 @@ const App: React.FC = () => {
       setTimeout(() => setShowToast(null), 6000);
     }
   };
+
+  // helper to convert Uint8Array to base64
+  function bufferToBase64(uint8: Uint8Array) {
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < uint8.length; i += chunkSize) {
+      const chunk = uint8.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    return btoa(binary);
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F1F5F9]">
