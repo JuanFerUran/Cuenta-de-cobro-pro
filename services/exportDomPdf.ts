@@ -21,12 +21,45 @@ export const exportPreviewAsPdf = async (
   const scale = options.scale ?? 3;
   const multipage = options.multipage ?? true;
 
-  const canvas = await html2canvas(el, {
-    scale,
+  // Clone the preview node so we can force exact A4 pixel width and avoid
+  // responsive/transform differences from the live layout. We'll wait for
+  // fonts and images to load in the clone before capturing.
+  const clone = el.cloneNode(true) as HTMLElement;
+  // compute approximate pixels for A4 width: px = mm * (dpi / 25.4)
+  const dpi = 96 * (scale || 1); // base CSS DPI 96, multiplied by chosen scale
+  const pxWidth = Math.round(pageWidthMMToPx(210, dpi));
+
+  // apply styles to the clone to guarantee the layout
+  clone.style.boxSizing = 'border-box';
+  clone.style.width = `${pxWidth}px`;
+  clone.style.maxWidth = `${pxWidth}px`;
+  clone.style.transform = 'none';
+  clone.style.position = 'absolute';
+  clone.style.left = '-9999px';
+  clone.style.top = '0';
+  clone.style.backgroundColor = '#ffffff';
+
+  // create a wrapper so fonts/CSS still apply
+  const wrapper = document.createElement('div');
+  wrapper.style.position = 'absolute';
+  wrapper.style.left = '-9999px';
+  wrapper.style.top = '0';
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+
+  // wait for fonts and images inside the clone
+  await document.fonts.ready;
+  await waitForImages(clone);
+
+  const canvas = await html2canvas(clone, {
+    scale: 1,
     useCORS: true,
     allowTaint: true,
     backgroundColor: '#ffffff'
   });
+
+  // remove clone after capture
+  document.body.removeChild(wrapper);
 
   const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const pageWidth = 210; // mm
@@ -75,3 +108,22 @@ export const exportPreviewAsPdf = async (
 };
 
 export default exportPreviewAsPdf;
+
+// helpers
+function pageWidthMMToPx(mm: number, dpi: number) {
+  return (mm * dpi) / 25.4;
+}
+
+function waitForImages(container: Element) {
+  const imgs = Array.from(container.querySelectorAll('img')) as HTMLImageElement[];
+  return Promise.all(
+    imgs.map((img) => {
+      return new Promise<void>((resolve) => {
+        if (!img) return resolve();
+        if (img.complete) return resolve();
+        img.addEventListener('load', () => resolve());
+        img.addEventListener('error', () => resolve());
+      });
+    })
+  ).then(() => undefined);
+}
