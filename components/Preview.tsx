@@ -164,6 +164,7 @@ function ExportModalTrigger({
   const [open, setOpen] = useState(false);
   const [scale, setScale] = useState<number>(3);
   const [multipage, setMultipage] = useState<boolean>(true);
+  const [serverRender, setServerRender] = useState<boolean>(false);
 
   return (
     <div>
@@ -202,6 +203,16 @@ function ExportModalTrigger({
               <label htmlFor="mp" className="text-sm font-bold">Permitir multipágina</label>
             </div>
 
+            <div className="mb-4 flex items-center gap-3">
+              <input
+                id="server"
+                type="checkbox"
+                checked={serverRender}
+                onChange={(e) => setServerRender(e.target.checked)}
+              />
+              <label htmlFor="server" className="text-sm font-bold">Usar render server (Puppeteer) — PDF idéntico</label>
+            </div>
+
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setOpen(false)}
@@ -210,9 +221,30 @@ function ExportModalTrigger({
                 Cancelar
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   setOpen(false);
-                  onExport({ scale, multipage });
+                  if (serverRender) {
+                    // call server API
+                    try {
+                      const state = localStorage.getItem('axyra_invoice_state_v4');
+                      const res = await fetch('/api/render-pdf', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ state, url: window.location.origin })
+                      });
+                      if (!res.ok) throw new Error('Server render failed');
+                      const blob = await res.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url; a.download = `cuenta-${numero}.pdf`; document.body.appendChild(a); a.click();
+                      a.remove();
+                      URL.revokeObjectURL(url);
+                    } catch (err) {
+                      alert('Error al renderizar en servidor: ' + err.message);
+                    }
+                  } else {
+                    onExport({ scale, multipage });
+                  }
                 }}
                 className="px-3 py-2 rounded bg-accent-500 text-white font-bold"
               >
