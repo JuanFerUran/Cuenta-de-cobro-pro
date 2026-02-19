@@ -46,213 +46,193 @@ export const generatePDF = async (state: AppState): Promise<jsPDF> => {
   const primaryRGB = hexToRgb(branding.primaryColor);
   const accentRGB = hexToRgb(branding.accentColor);
 
-  // Márgenes
-  const marginX = 15;
   const pageWidth = 210;
+  const marginX = 18;
   const contentWidth = pageWidth - (marginX * 2);
-  let currentY = 0;
+  let y = 10;
 
-  // 1. Top thick color bar
+  // ========== 1. TOP BAR ==========
   doc.setFillColor(accentRGB[0], accentRGB[1], accentRGB[2]);
-  doc.rect(0, 0, pageWidth, 8, 'F');
-  currentY = 15;
+  doc.rect(0, 0, pageWidth, 6, 'F');
 
-  // 2. Header: Logo area (left) and Title (right)
-  // Logo placeholder
-  doc.setFillColor(217, 197, 157); // Beige similar a preview
-  doc.roundedRect(marginX, currentY, 15, 15, 3, 3, 'F');
-  
+  // ========== 2. HEADER SECTION ==========
+  y = 15;
+
+  // Left: Company name
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.setTextColor(primaryRGB[0], primaryRGB[1], primaryRGB[2]);
+  doc.text(myData.nombre.toUpperCase(), marginX, y);
+
+  // Right: Title + Number
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(primaryRGB[0], primaryRGB[1], primaryRGB[2]);
+  doc.text(branding.documentTitle.toUpperCase(), pageWidth - marginX, y, { align: 'right' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
+  doc.text(branding.documentSubtitle.toUpperCase(), pageWidth - marginX, y + 6, { align: 'right' });
+
+  // Number badge
+  doc.setFillColor(accentRGB[0], accentRGB[1], accentRGB[2]);
+  doc.rect(pageWidth - marginX - 52, y + 9, 52, 7, 'F');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.setTextColor(100, 80, 60);
-  doc.text('A', marginX + 7.5, currentY + 10, { align: 'center' });
+  doc.setTextColor(255, 255, 255);
+  doc.text(`No. ${invoiceDetails.numero}`, pageWidth - marginX - 1, y + 13.5, { align: 'right' });
 
-  // Emisor info next to logo
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.setTextColor(15, 23, 42);
-  doc.text(myData.nombre.toUpperCase(), marginX + 20, currentY + 3);
+  y += 25;
 
+  // Company info
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`NIT: ${myData.documento}`, marginX, y);
+  doc.text(`Teléfono: ${myData.telefono}`, marginX, y + 5);
+  doc.text(`${myData.direccion}`, marginX, y + 10);
+
+  // Emission date right
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
-  doc.text(myData.documento, marginX + 20, currentY + 9);
+  doc.text(`EMISIÓN: ${invoiceDetails.fechaEmision}`, pageWidth - marginX, y, { align: 'right' });
+
+  y += 20;
+
+  // ========== 3. SEPARATOR ==========
+  doc.setDrawColor(accentRGB[0], accentRGB[1], accentRGB[2]);
+  doc.setLineWidth(0.5);
+  doc.line(marginX, y, pageWidth - marginX, y);
+
+  y += 8;
+
+  // ========== 4. CLIENT & TOTAL SECTION ==========
+  const colW = (contentWidth / 2) - 3;
+
+  // Client box
+  doc.setFillColor(245, 245, 245);
+  doc.rect(marginX, y, colW, 20, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
+  doc.text('CLIENTE / PAGADOR', marginX + 4, y + 3);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(15, 23, 42);
+  const clientLines = doc.splitTextToSize(clientData.nombre || 'Cliente', colW - 8);
+  doc.text(clientLines, marginX + 4, y + 8);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
-  doc.text(myData.telefono, marginX + 20, currentY + 14);
+  doc.text(`NIT/CC: ${clientData.nit || '---'}`, marginX + 4, y + 16);
 
-  // Title on right
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.setTextColor(15, 23, 42);
-  doc.text(branding.documentTitle.toUpperCase(), pageWidth - marginX, currentY, { align: 'right' });
+  // Total box
+  doc.setFillColor(accentRGB[0], accentRGB[1], accentRGB[2]);
+  doc.rect(marginX + colW + 6, y, colW, 20, 'F');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
-  doc.text(branding.documentSubtitle.toUpperCase(), pageWidth - marginX, currentY + 8, { align: 'right' });
+  doc.setFontSize(7);
+  doc.setTextColor(255, 255, 255);
+  doc.text('TOTAL A PAGAR', marginX + colW + 10, y + 3);
 
-  // Number box
-  doc.setFillColor(217, 197, 157);
-  doc.roundedRect(pageWidth - marginX - 50, currentY + 10, 50, 8, 2, 2, 'F');
-  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(255, 255, 255);
+  doc.text(formatCurrency(invoiceDetails.valor), marginX + colW + 10, y + 13, { align: 'center' });
+
+  y += 26;
+
+  // ========== 5. SERVICE SECTION ==========
+  doc.setFillColor(accentRGB[0], accentRGB[1], accentRGB[2]);
+  doc.rect(marginX, y, contentWidth, 7, 'F');
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(255, 255, 255);
-  doc.text(`No. ${invoiceDetails.numero}`, pageWidth - marginX - 5, currentY + 14.5, { align: 'right' });
+  doc.text('DESCRIPCIÓN DEL SERVICIO', marginX + 4, y + 5);
 
-  // Emission date
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
-  doc.setTextColor(100, 116, 139);
-  doc.text(`EMISIÓN: ${invoiceDetails.fechaEmision}`, pageWidth - marginX, currentY + 20, { align: 'right' });
+  y += 10;
 
-  currentY += 25;
-
-  // 3. Contact info
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(100, 116, 139);
-  doc.text(myData.direccion, marginX, currentY);
-
-  currentY += 15;
-
-  // 4. Client (left) and Total (right) - 2 boxes with rounded corners
-  const colWidth = (contentWidth / 2) - 4;
-
-  // Left: Client box
-  doc.setFillColor(240, 240, 240);
-  doc.roundedRect(marginX, currentY, colWidth, 22, 3, 3, 'F');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
-  doc.setTextColor(100, 116, 139);
-  doc.text('PAGADOR / CLIENTE', marginX + 4, currentY + 3);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(15, 23, 42);
-  const clientNameLines = doc.splitTextToSize(clientData.nombre || 'Nombre del cliente', colWidth - 8);
-  doc.text(clientNameLines, marginX + 4, currentY + 10);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(100, 116, 139);
-  doc.text(`NIT/CC: ${clientData.nit || '---'}`, marginX + 4, currentY + 18);
-
-  // Right: Total box with rounded corners
-  doc.setFillColor(accentRGB[0], accentRGB[1], accentRGB[2]);
-  doc.roundedRect(marginX + colWidth + 8, currentY, colWidth, 22, 3, 3, 'F');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
-  doc.setTextColor(255, 255, 255);
-  doc.text('TOTAL NETO A PAGAR', marginX + colWidth + 12, currentY + 3);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.setTextColor(255, 255, 255);
-  doc.text(formatCurrency(invoiceDetails.valor), marginX + colWidth + 12, currentY + 14, { align: 'center' });
-
-  currentY += 28;
-
-  // 5. Service description section
-  // Header with rounded corners
-  doc.setFillColor(217, 197, 157);
-  doc.roundedRect(marginX, currentY, contentWidth, 6, 2, 2, 'F');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(255, 255, 255);
-  doc.text('DESCRIPCIÓN DEL SERVICIO PRESTADO', marginX + 4, currentY + 4);
-
-  currentY += 8;
-
-  // Body - white background with rounded corners
-  doc.setFillColor(255, 255, 255);
+  // Service content area
+  doc.setFillColor(250, 250, 250);
   doc.setDrawColor(220, 220, 220);
   doc.setLineWidth(0.3);
-  doc.roundedRect(marginX, currentY, contentWidth, 40, 2, 2, 'FD');
+  doc.rect(marginX, y, contentWidth, 38, 'FD');
 
   doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(40, 50, 70);
+  const conceptLines = doc.splitTextToSize(invoiceDetails.concepto || 'Pendiente descripción', contentWidth - 8);
+  doc.text(conceptLines, marginX + 4, y + 4);
+
+  y += 42;
+
+  // ========== 6. PAYMENT & SIGNATURE ==========
+  y += 3;
+
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.setTextColor(51, 65, 85);
-  const splitConcept = doc.splitTextToSize(invoiceDetails.concepto || 'Pendiente por definir descripción.', contentWidth - 8);
-  doc.text(splitConcept, marginX + 4, currentY + 5);
-
-  currentY += 44;
-
-  // 6. Payment and signature section
-  // Separator
-  doc.setLineWidth(0.2);
-  doc.setDrawColor(200, 200, 200);
-  doc.line(marginX, currentY, pageWidth - marginX, currentY);
-  currentY += 6;
-
-  // Left: Payment data
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
   doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
-  doc.text('DATOS PARA EL PAGO', marginX, currentY);
+  doc.text('DATOS DE PAGO', marginX, y);
 
-  currentY += 5;
+  y += 7;
 
-  // Payment box with rounded corners
-  doc.setFillColor(240, 240, 240);
-  doc.roundedRect(marginX, currentY, colWidth, 18, 2, 2, 'F');
+  // Payment info box
+  doc.setFillColor(245, 245, 245);
+  doc.rect(marginX, y, colW, 17, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(15, 23, 42);
+  doc.text(bankData.banco, marginX + 4, y + 3);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Tipo: ${bankData.tipo}`, marginX + 4, y + 8);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
+  doc.text(bankData.numero, marginX + 4, y + 12);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Titular: ${bankData.titular}`, marginX + 4, y + 15);
+
+  // Signature area
+  doc.setLineWidth(0.4);
+  doc.setDrawColor(accentRGB[0], accentRGB[1], accentRGB[2]);
+  doc.line(marginX + colW + 15, y + 8, marginX + colW + 30, y + 8);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(15, 23, 42);
-  doc.text(bankData.banco.toUpperCase(), marginX + 4, currentY + 3);
+  doc.text('Firma', marginX + colW + 22, y + 12, { align: 'center' });
+
+  y += 20;
+
+  // ========== 7. FOOTER ==========
+  y += 5;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
-  doc.setTextColor(100, 116, 139);
-  doc.text(`Cuenta ${bankData.tipo}:`, marginX + 4, currentY + 8);
+  doc.setTextColor(140, 140, 140);
+  const footerLines = doc.splitTextToSize(branding.footerText, contentWidth);
+  doc.text(footerLines, pageWidth / 2, y, { align: 'center' });
+
+  y += (footerLines.length * 2.5) + 2;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
-  doc.text(bankData.numero, marginX + 4, currentY + 12);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(100, 116, 139);
-  doc.text(`Titular: ${bankData.titular}`, marginX + 4, currentY + 16);
-
-  // Right: Signature area
-  doc.setLineWidth(0.2);
-  doc.setDrawColor(200, 200, 200);
-  doc.line(marginX + colWidth + 12, currentY + 8, marginX + colWidth + 32, currentY + 8);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(15, 23, 42);
-  doc.text(myData.nombre.toUpperCase(), pageWidth - marginX, currentY + 12, { align: 'right' });
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6);
-  doc.setTextColor(100, 116, 139);
-  doc.text('Firma Digitalizada', pageWidth - marginX, currentY + 16, { align: 'right' });
-
-  currentY += 22;
-
-  // 7. Footer
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6);
-  doc.setTextColor(150, 150, 150);
-  const footerLines = doc.splitTextToSize(branding.footerText, contentWidth - 20);
-  doc.text(footerLines, pageWidth / 2, currentY, { align: 'center' });
-
-  currentY += (footerLines.length * 2.5) + 3;
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
-  doc.setTextColor(accentRGB[0], accentRGB[1], accentRGB[2]);
-  doc.text(`Generado por ${myData.nombre}`, pageWidth / 2, currentY, { align: 'center' });
+  doc.text(`Generado por: ${myData.nombre}`, pageWidth / 2, y, { align: 'center' });
 
   return doc;
 };
