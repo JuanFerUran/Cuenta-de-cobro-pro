@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { AppState } from '../types';
+import exportPreviewAsPdf from '../services/exportDomPdf';
 
 interface Props {
   state: AppState;
@@ -27,7 +28,7 @@ const Preview: React.FC<Props> = ({ state }) => {
   };
 
   return (
-    <div className="a4-preview flex flex-col font-sans text-slate-800 bg-white mx-auto overflow-hidden relative shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] border border-slate-200 rounded-sm">
+    <div id="invoice-preview" className="a4-preview flex flex-col font-sans text-slate-800 bg-white mx-auto overflow-hidden relative shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] border border-slate-200 rounded-sm">
       {/* Línea Superior con color dinámico */}
       <div className="h-2 w-full" style={accentBgStyle}></div>
       
@@ -61,6 +62,14 @@ const Preview: React.FC<Props> = ({ state }) => {
           </h1>
           <div className="mt-4 inline-block text-white px-5 py-2 rounded-xl font-black text-xs" style={primaryBgStyle}>
             No. {invoiceDetails.numero}
+          </div>
+          <div className="mt-3">
+            <button
+              onClick={() => exportPreviewAsPdf('invoice-preview', `cuenta-${invoiceDetails.numero}.pdf`)}
+              className="text-[12px] font-bold px-4 py-2 rounded-lg border border-slate-200 bg-white hover:shadow"
+            >
+              Exportar exacto
+            </button>
           </div>
           <div className="mt-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">
             Emisión: {invoiceDetails.fechaEmision}
