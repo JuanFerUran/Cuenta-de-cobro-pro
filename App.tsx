@@ -154,13 +154,17 @@ const App: React.FC = () => {
           <!DOCTYPE html>
           <html><head>
             <meta charset="UTF-8">
-            <script src="https://cdn.tailwindcss.com"></script>
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-            <style>
-              @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
-              body { font-family: Inter; margin: 0; padding: 20px; background: white; }
-              @media print { body { margin: 0; padding: 0; } }
-            </style>
+                <script src="https://cdn.tailwindcss.com"></script>
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+                <style>
+                  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+                  body { font-family: Inter; margin: 0; padding: 20px; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+                  /* Force print colors to match screen (helps when browsers skip background graphics) */
+                  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+                  /* Ensure preview container keeps background colors */
+                  .a4-preview, #invoice-preview { -webkit-print-color-adjust: exact !important; background-color: inherit !important; }
+                  @media print { body { margin: 0; padding: 0; } .no-print { display: none !important; } }
+                </style>
           </head><body>${previewHtml}</body></html>
         `);
         win.document.close();
@@ -200,8 +204,12 @@ const App: React.FC = () => {
           <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
-            body { font-family: Inter; margin: 0; padding: 20px; background: white; }
-            @media print { body { margin: 0; padding: 0; } }
+            body { font-family: Inter; margin: 0; padding: 20px; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+            /* Force print colors to match screen (helps when browsers skip background graphics) */
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+            /* Ensure preview container keeps background colors */
+            .a4-preview, #invoice-preview { -webkit-print-color-adjust: exact !important; background-color: inherit !important; }
+            @media print { body { margin: 0; padding: 0; } .no-print { display: none !important; } }
           </style>
         </head><body>${previewHtml}</body></html>
       `);
