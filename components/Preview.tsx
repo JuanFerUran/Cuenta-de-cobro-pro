@@ -273,11 +273,13 @@ function ExportModalTrigger({
                       URL.revokeObjectURL(url);
                     } catch (err) {
                       // Fallback to local export if server is not available
-                      console.warn('Server render unavailable, using local export:', err);
-                      setTimeout(() => onExport({ scale, multipage }), 100);
+                      console.warn('Server render unavailable, using print-preview fallback:', err);
+                      // Open preview window and instruct printing (preserves Tailwind styling)
+                      openPreviewWindowForExport();
                     }
                   } else {
-                    onExport({ scale, multipage });
+                    // Use preview-print fallback instead of html2canvas to ensure identical styling
+                    openPreviewWindowForExport();
                   }
                 }}
                 className="px-3 py-2 rounded bg-blue-600 text-white font-bold hover:bg-blue-700"
@@ -290,4 +292,32 @@ function ExportModalTrigger({
       )}
     </div>
   );
+}
+
+// helper to open a new window with the preview HTML and force print-color-adjust
+function openPreviewWindowForExport() {
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert('Abre ventanas emergentes y vuelve a intentar');
+    return;
+  }
+  const previewHtml = document.getElementById('invoice-preview')?.outerHTML || '';
+  win.document.write(`
+    <!DOCTYPE html>
+    <html><head>
+      <meta charset="UTF-8">
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+        body { font-family: Inter; margin: 0; padding: 20px; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+        .a4-preview, #invoice-preview { -webkit-print-color-adjust: exact !important; background-color: inherit !important; }
+        @media print { body { margin: 0; padding: 0; } .no-print { display: none !important; } }
+      </style>
+    </head><body>${previewHtml}</body></html>
+  `);
+  win.document.close();
+  // Give browser time to load Tailwind then open print dialog
+  setTimeout(() => { try { win.print(); } catch (e) { /* ignore */ } }, 600);
 }
