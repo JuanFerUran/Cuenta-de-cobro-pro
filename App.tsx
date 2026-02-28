@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   DEFAULT_MY_DATA, 
@@ -125,14 +124,13 @@ const App: React.FC = () => {
   const handleDownload = async () => {
     if (!validate()) return;
     try {
-      // Try server-side render first, fallback to client if unavailable
-      try {
-        const res = await fetch('/api/render-pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ state, url: window.location.origin })
-        });
-        if (!res.ok) throw new Error('Server render failed');
+      // Try server-side render first (Vercel Puppeteer)
+      const res = await fetch('/api/render-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, url: window.location.origin })
+      });
+      if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -141,13 +139,16 @@ const App: React.FC = () => {
         setShowToast({ msg: 'PDF descargado', type: 'success' });
         setTimeout(() => setShowToast(null), 2500);
         return;
-      } catch (serverErr) {
-        console.warn('Server render unavailable, using local export', serverErr);
-        // Fallback to client-side render
-        await exportPreviewAsPdf('invoice-preview', `${state.invoiceDetails.numero}.pdf`, { scale: 3, multipage: true });
-        setShowToast({ msg: 'PDF descargado (modo local)', type: 'success' });
-        setTimeout(() => setShowToast(null), 2500);
       }
+    } catch (err) {
+      console.warn('Server render unavailable');
+    }
+    
+    // Fallback: Use client-side export
+    try {
+      await exportPreviewAsPdf('invoice-preview', `${state.invoiceDetails.numero}.pdf`, { scale: 2, multipage: true });
+      setShowToast({ msg: 'PDF descargado', type: 'success' });
+      setTimeout(() => setShowToast(null), 2500);
     } catch (err) {
       console.error('Download error:', err);
       setShowToast({ msg: "Error al generar PDF", type: 'error' });
@@ -157,27 +158,47 @@ const App: React.FC = () => {
   const handlePrint = async () => {
     if (!validate()) return;
     try {
-      // Try server-side render first, fallback to client if unavailable
-      try {
-        const res = await fetch('/api/render-pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ state, url: window.location.origin })
-        });
-        if (!res.ok) throw new Error('Server render failed');
+      // Try server-side render first (Vercel Puppeteer)
+      const res = await fetch('/api/render-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, url: window.location.origin })
+      });
+      if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank');
         return;
-      } catch (serverErr) {
-        console.warn('Server render unavailable, using local export', serverErr);
-        // Fallback: Just open preview for printing from browser
-        alert('Usar Ctrl+P en la vista previa para imprimir');
-        const previewWindow = window.open('', '_blank');
-        if (previewWindow) {
-          previewWindow.document.write(document.getElementById('invoice-preview')?.innerHTML || '');
-        }
       }
+    } catch (err) {
+      console.warn('Server render unavailable');
+    }
+    
+    // Fallback: Generate local PDF and open
+    try {
+      const { jsPDF } = await import('jspdf');
+      const html2canvas_import = await import('html2canvas');
+      const html2canvas = html2canvas_import.default;
+      
+      const el = document.getElementById('invoice-preview');
+      if (!el) throw new Error('Preview not found');
+      
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        width: 793,
+        windowWidth: 793
+      });
+      
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const imgData = canvas.toDataURL('image/png');
+      const pdfUrl = pdf.output('blob');
+      pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+      
+      const url = URL.createObjectURL(pdf.output('blob'));
+      window.open(url, '_blank');
     } catch (err) {
       console.error('Print error:', err);
       setShowToast({ msg: "Error al abrir impresión", type: 'error' });
@@ -189,7 +210,7 @@ const App: React.FC = () => {
 
     setStatus(AppStatus.SENDING);
     try {
-      let b64: string;
+      let pdfBlob: Blob;
       
       // Try server-side render first
       try {
@@ -198,35 +219,47 @@ const App: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ state, url: window.location.origin })
         });
-        if (!res.ok) throw new Error('Error al generar PDF en servidor');
-        const arrayBuffer = await res.arrayBuffer();
-        const uint8 = new Uint8Array(arrayBuffer);
-        b64 = bufferToBase64(uint8);
+        if (res.ok) {
+          pdfBlob = await res.blob();
+        } else {
+          throw new Error('Server unavailable');
+        }
       } catch (serverErr) {
-        console.warn('Server render unavailable, using local export', serverErr);
-        // Fallback: Generate PDF locally
-        const canvas = await html2canvas(document.getElementById('invoice-preview')!, {
+        console.warn('Server render unavailable, using local export');
+        // Fallback: Generate local PDF
+        const html2canvas_import = await import('html2canvas');
+        const html2canvas = html2canvas_import.default;
+        const { jsPDF } = await import('jspdf');
+        
+        const el = document.getElementById('invoice-preview');
+        if (!el) throw new Error('Preview not found');
+        
+        const canvas = await html2canvas(el, {
+          scale: 2,
           useCORS: true,
           allowTaint: true,
           backgroundColor: '#ffffff',
-          scale: 2
+          width: 793,
+          windowWidth: 793
         });
-        const { jsPDF } = await import('jspdf');
+        
         const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
         const imgData = canvas.toDataURL('image/png');
-        const pxPerMm = canvas.width / 210;
-        const imgHeightMM = canvas.height / pxPerMm;
-        pdf.addImage(imgData, 'PNG', 0, 0, 210, Math.min(imgHeightMM, 297));
-        const pdfBlob = pdf.output('blob');
-        const reader = new FileReader();
-        await new Promise((resolve) => {
-          reader.onload = () => {
-            b64 = (reader.result as string).split(',')[1];
-            resolve(null);
-          };
-          reader.readAsDataURL(pdfBlob);
-        });
+        pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+        pdfBlob = pdf.output('blob');
       }
+
+      // Convert blob to base64
+      const reader = new FileReader();
+      const b64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string;
+          const b64String = result.split(',')[1] || result;
+          resolve(b64String);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(pdfBlob);
+      });
 
       const response = await sendEmail({
         to: state.clientData.email,
@@ -249,6 +282,7 @@ const App: React.FC = () => {
         throw new Error(response.message);
       }
     } catch (err: any) {
+      console.error('Email error:', err);
       setShowToast({ msg: err.message || "Error al enviar el correo", type: 'error' });
       setStatus(AppStatus.ERROR);
     } finally {
