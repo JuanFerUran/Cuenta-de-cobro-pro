@@ -13,6 +13,7 @@ import Preview from './components/Preview';
 import ConfigPanel from './components/ConfigPanel';
 import { generatePDF, downloadPDF, printPDF } from './services/pdfService';
 import { sendEmail } from './services/emailService';
+import exportPreviewAsPdf from './services/exportDomPdf';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
@@ -124,21 +125,31 @@ const App: React.FC = () => {
   const handleDownload = async () => {
     if (!validate()) return;
     try {
-      // Server-side render to get pixel-perfect PDF
-      const res = await fetch('/api/render-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state, url: window.location.origin })
-      });
-      if (!res.ok) throw new Error('Error al generar PDF en servidor');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `${state.invoiceDetails.numero}.pdf`; document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-      setShowToast({ msg: 'PDF descargado', type: 'success' });
-      setTimeout(() => setShowToast(null), 2500);
+      // Try server-side render first, fallback to client if unavailable
+      try {
+        const res = await fetch('/api/render-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state, url: window.location.origin })
+        });
+        if (!res.ok) throw new Error('Server render failed');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${state.invoiceDetails.numero}.pdf`; document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        setShowToast({ msg: 'PDF descargado', type: 'success' });
+        setTimeout(() => setShowToast(null), 2500);
+        return;
+      } catch (serverErr) {
+        console.warn('Server render unavailable, using local export', serverErr);
+        // Fallback to client-side render
+        await exportPreviewAsPdf('invoice-preview', `${state.invoiceDetails.numero}.pdf`, { scale: 3, multipage: true });
+        setShowToast({ msg: 'PDF descargado (modo local)', type: 'success' });
+        setTimeout(() => setShowToast(null), 2500);
+      }
     } catch (err) {
+      console.error('Download error:', err);
       setShowToast({ msg: "Error al generar PDF", type: 'error' });
     }
   };
@@ -146,16 +157,29 @@ const App: React.FC = () => {
   const handlePrint = async () => {
     if (!validate()) return;
     try {
-      const res = await fetch('/api/render-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state, url: window.location.origin })
-      });
-      if (!res.ok) throw new Error('Error al generar PDF en servidor');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      // Try server-side render first, fallback to client if unavailable
+      try {
+        const res = await fetch('/api/render-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state, url: window.location.origin })
+        });
+        if (!res.ok) throw new Error('Server render failed');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        return;
+      } catch (serverErr) {
+        console.warn('Server render unavailable, using local export', serverErr);
+        // Fallback: Just open preview for printing from browser
+        alert('Usar Ctrl+P en la vista previa para imprimir');
+        const previewWindow = window.open('', '_blank');
+        if (previewWindow) {
+          previewWindow.document.write(document.getElementById('invoice-preview')?.innerHTML || '');
+        }
+      }
     } catch (err) {
+      console.error('Print error:', err);
       setShowToast({ msg: "Error al abrir impresión", type: 'error' });
     }
   };
@@ -165,16 +189,44 @@ const App: React.FC = () => {
 
     setStatus(AppStatus.SENDING);
     try {
-      // Render PDF on server and send as base64
-      const res = await fetch('/api/render-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state, url: window.location.origin })
-      });
-      if (!res.ok) throw new Error('Error al generar PDF en servidor');
-      const arrayBuffer = await res.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuffer);
-      const b64 = bufferToBase64(uint8);
+      let b64: string;
+      
+      // Try server-side render first
+      try {
+        const res = await fetch('/api/render-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state, url: window.location.origin })
+        });
+        if (!res.ok) throw new Error('Error al generar PDF en servidor');
+        const arrayBuffer = await res.arrayBuffer();
+        const uint8 = new Uint8Array(arrayBuffer);
+        b64 = bufferToBase64(uint8);
+      } catch (serverErr) {
+        console.warn('Server render unavailable, using local export', serverErr);
+        // Fallback: Generate PDF locally
+        const canvas = await html2canvas(document.getElementById('invoice-preview')!, {
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+          scale: 2
+        });
+        const { jsPDF } = await import('jspdf');
+        const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+        const imgData = canvas.toDataURL('image/png');
+        const pxPerMm = canvas.width / 210;
+        const imgHeightMM = canvas.height / pxPerMm;
+        pdf.addImage(imgData, 'PNG', 0, 0, 210, Math.min(imgHeightMM, 297));
+        const pdfBlob = pdf.output('blob');
+        const reader = new FileReader();
+        await new Promise((resolve) => {
+          reader.onload = () => {
+            b64 = (reader.result as string).split(',')[1];
+            resolve(null);
+          };
+          reader.readAsDataURL(pdfBlob);
+        });
+      }
 
       const response = await sendEmail({
         to: state.clientData.email,

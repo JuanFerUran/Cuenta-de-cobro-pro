@@ -272,7 +272,9 @@ function ExportModalTrigger({
                       a.remove();
                       URL.revokeObjectURL(url);
                     } catch (err) {
-                      alert('Error al renderizar en servidor: ' + err.message);
+                      // Fallback to local export if server is not available
+                      console.warn('Server render unavailable, using local export:', err);
+                      setTimeout(() => onExport({ scale, multipage }), 100);
                     }
                   } else {
                     onExport({ scale, multipage });
