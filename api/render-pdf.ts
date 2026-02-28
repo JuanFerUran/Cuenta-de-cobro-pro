@@ -49,53 +49,110 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch (e) {}
     });
 
+    // A4 dimensions in pixels at 96 DPI (standard screen DPI)
     const pageWidthMM = 210;
-    const cssDpi = 96; // CSS pixels per inch baseline
-    const pxWidth = Math.round((pageWidthMM * cssDpi) / 25.4);
+    const pageHeightMM = 297;
+    const DPI_MULTIPLIER = 96 / 25.4; // Convert mm to px at 96 DPI
+    const pxWidth = Math.round(pageWidthMM * DPI_MULTIPLIER); // ~793px
+    const pxHeight = Math.round(pageHeightMM * DPI_MULTIPLIER); // ~1122px
 
-    // set viewport width to A4 px width to match preview scaling
-    await page.setViewport({ width: pxWidth, height: 1200 });
+    // Set viewport to match A4 exactly
+    await page.setViewport({ 
+      width: pxWidth, 
+      height: 2400,  // Taller viewport to capture full content
+      deviceScaleFactor: 1 
+    });
 
     // navigate to page and wait until network idle
     const target = host;
+    console.log(`Navigating to: ${target}`);
     await page.goto(target, { waitUntil: 'networkidle0', timeout: 60000 });
 
-    // wait for the preview element and ensure it's rendered
-    const el = await page.waitForSelector('#invoice-preview', { timeout: 15000 });
-
-    // wait for fonts/images to load fully
+    // Wait for Tailwind CSS to be fully loaded
+    console.log('Waiting for styles and fonts to load...');
     try {
       await page.evaluate(() => (document as any).fonts.ready);
-    } catch (e) {}
-    await page.waitForTimeout(800);
+    } catch (e) {
+      console.warn('Font loading failed:', e);
+    }
+
+    // Wait for all images to load
+    await page.evaluate(() => {
+      return new Promise<void>((resolve) => {
+        const imgs = document.querySelectorAll('img');
+        let loaded = 0;
+        if (imgs.length === 0) {
+          resolve();
+          return;
+        }
+        imgs.forEach((img) => {
+          if (img.complete) {
+            loaded++;
+            if (loaded === imgs.length) resolve();
+          } else {
+            img.addEventListener('load', () => {
+              loaded++;
+              if (loaded === imgs.length) resolve();
+            });
+            img.addEventListener('error', () => {
+              loaded++;
+              if (loaded === imgs.length) resolve();
+            });
+          }
+        });
+      });
+    });
+
+    // Additional wait for Tailwind to process
+    await page.waitForTimeout(1000);
+
+    // wait for the preview element and ensure it's rendered
+    console.log('Waiting for invoice preview element...');
+    const el = await page.waitForSelector('#invoice-preview', { timeout: 15000 });
 
     const box = await el.boundingBox();
     if (!box) throw new Error('Could not determine preview bounding box');
 
-    // compute height in mm based on pxPerMm
-    const pxPerMm = pxWidth / pageWidthMM;
-    const heightMm = Math.ceil(box.height / pxPerMm);
+    console.log(`Preview dimensions: ${box.width}x${box.height}px`);
 
     // scroll element into view at top-left to ensure page.pdf captures it correctly
     await page.evaluate((selector) => {
       const el = document.querySelector(selector) as HTMLElement;
-      if (el) el.scrollIntoView({ behavior: 'auto', block: 'start', inline: 'start' });
+      if (el) {
+        el.scrollIntoView({ behavior: 'auto', block: 'start', inline: 'start' });
+        // Ensure element is at the top of the page
+        window.scrollY === 0;
+      }
     }, '#invoice-preview');
 
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
 
+    // Calculate actual height needed based on content
+    const contentHeightPx = Math.ceil(box.height);
+    const contentHeightMM = (contentHeightPx / DPI_MULTIPLIER);
+
+    console.log(`Generating PDF: ${pageWidthMM}x${contentHeightMM.toFixed(2)}mm`);
+
+    // Generate PDF with exact A4 width but dynamic height
     const pdfBuffer = await page.pdf({
-      printBackground: true,
+      format: 'a4',
       width: `${pageWidthMM}mm`,
-      height: `${heightMm}mm`,
+      height: `${Math.max(pageHeightMM, contentHeightMM)}mm`,
+      margin: { top: 0, bottom: 0, left: 0, right: 0 },
+      printBackground: true,
+      displayHeaderFooter: false,
+      scale: 1,
+      preferCSSPageSize: false,
     });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="document.pdf"');
     res.status(200).send(pdfBuffer);
+
+    console.log('PDF generated successfully');
   } catch (err) {
     console.error('render-pdf error', err);
-    res.status(500).send('Failed to render PDF');
+    res.status(500).send(`Failed to render PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
   } finally {
     if (browser) await browser.close();
   }

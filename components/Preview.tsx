@@ -187,7 +187,7 @@ function ExportModalTrigger({
   const [open, setOpen] = useState(false);
   const [scale, setScale] = useState<number>(3);
   const [multipage, setMultipage] = useState<boolean>(true);
-  const [serverRender, setServerRender] = useState<boolean>(false);
+  const [serverRender, setServerRender] = useState<boolean>(true); // Default to true for perfect PDFs
 
   return (
     <div>
@@ -203,27 +203,9 @@ function ExportModalTrigger({
           <div className="bg-white rounded-lg p-6 w-[360px]">
             <h3 className="text-lg font-bold mb-3">Opciones de exportación</h3>
 
-            <div className="mb-3">
-              <label className="block text-sm font-bold mb-1">Resolución (scale)</label>
-              <select
-                value={scale}
-                onChange={(e) => setScale(Number(e.target.value))}
-                className="w-full border p-2 rounded"
-              >
-                <option value={2}>2 (rápido - buena)</option>
-                <option value={2.5}>2.5 (equilibrado)</option>
-                <option value={3}>3 (máxima nitidez)</option>
-              </select>
-            </div>
-
-            <div className="mb-4 flex items-center gap-3">
-              <input
-                id="mp"
-                type="checkbox"
-                checked={multipage}
-                onChange={(e) => setMultipage(e.target.checked)}
-              />
-              <label htmlFor="mp" className="text-sm font-bold">Permitir multipágina</label>
+            <div className="mb-4 flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <i className="fas fa-info-circle text-blue-600"></i>
+              <p className="text-xs font-semibold text-blue-700">Se usa Puppeteer para PDF idéntico a la pantalla</p>
             </div>
 
             <div className="mb-4 flex items-center gap-3">
@@ -233,8 +215,35 @@ function ExportModalTrigger({
                 checked={serverRender}
                 onChange={(e) => setServerRender(e.target.checked)}
               />
-              <label htmlFor="server" className="text-sm font-bold">Usar render server (Puppeteer) — PDF idéntico</label>
+              <label htmlFor="server" className="text-sm font-bold">Usar render server (Recomendado) ✓</label>
             </div>
+
+            {!serverRender && (
+              <>
+                <div className="mb-3">
+                  <label className="block text-sm font-bold mb-1">Resolución (scale)</label>
+                  <select
+                    value={scale}
+                    onChange={(e) => setScale(Number(e.target.value))}
+                    className="w-full border p-2 rounded"
+                  >
+                    <option value={2}>2 (rápido - buena)</option>
+                    <option value={2.5}>2.5 (equilibrado)</option>
+                    <option value={3}>3 (máxima nitidez)</option>
+                  </select>
+                </div>
+
+                <div className="mb-4 flex items-center gap-3">
+                  <input
+                    id="mp"
+                    type="checkbox"
+                    checked={multipage}
+                    onChange={(e) => setMultipage(e.target.checked)}
+                  />
+                  <label htmlFor="mp" className="text-sm font-bold">Permitir multipágina</label>
+                </div>
+              </>
+            )}
 
             <div className="flex justify-end gap-3">
               <button
@@ -247,7 +256,7 @@ function ExportModalTrigger({
                 onClick={async () => {
                   setOpen(false);
                   if (serverRender) {
-                    // call server API
+                    // call server API for perfect PDF rendering
                     try {
                       const state = localStorage.getItem('axyra_invoice_state_v4');
                       const res = await fetch('/api/render-pdf', {
@@ -269,7 +278,7 @@ function ExportModalTrigger({
                     onExport({ scale, multipage });
                   }
                 }}
-                className="px-3 py-2 rounded bg-accent-500 text-white font-bold"
+                className="px-3 py-2 rounded bg-blue-600 text-white font-bold hover:bg-blue-700"
               >
                 Exportar
               </button>

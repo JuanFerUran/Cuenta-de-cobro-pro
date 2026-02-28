@@ -284,7 +284,7 @@ const App: React.FC = () => {
             {/* Efecto Escritorio */}
             <div className="bg-slate-200/50 p-4 lg:p-12 rounded-[2rem] border-4 border-white shadow-2xl overflow-hidden relative">
               <div className="max-h-[75vh] overflow-y-auto scrollbar-hide flex justify-center pb-8">
-                <div className="transform origin-top scale-[0.7] md:scale-[0.85] lg:scale-[0.95] xl:scale-100 transition-all duration-500">
+                <div className="transform origin-top scale-[0.7] md:scale-[0.85] lg:scale-[0.95] xl:scale-100 transition-all duration-500" id="preview-wrapper">
                   <Preview state={state} />
                 </div>
               </div>
