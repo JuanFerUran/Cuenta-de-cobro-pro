@@ -124,7 +124,7 @@ const App: React.FC = () => {
   const handleDownload = async () => {
     if (!validate()) return;
     try {
-      // Try server-side render first (Vercel Puppeteer)
+      // Try server-side render first (Vercel Puppeteer only)
       const res = await fetch('/api/render-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -141,18 +141,31 @@ const App: React.FC = () => {
         return;
       }
     } catch (err) {
-      console.warn('Server render unavailable');
+      // Silently continue to fallback
     }
     
-    // Fallback: Use client-side export
-    try {
-      await exportPreviewAsPdf('invoice-preview', `${state.invoiceDetails.numero}.pdf`, { scale: 2, multipage: true });
-      setShowToast({ msg: 'PDF descargado', type: 'success' });
-      setTimeout(() => setShowToast(null), 2500);
-    } catch (err) {
-      console.error('Download error:', err);
-      setShowToast({ msg: "Error al generar PDF", type: 'error' });
-    }
+    // Fallback: Open for browser print
+    setShowToast({ msg: 'Presiona Ctrl+P para descargar como PDF', type: 'info' });
+    setTimeout(() => {
+      const win = window.open('', '_blank');
+      if (win) {
+        const previewHtml = document.getElementById('invoice-preview')?.outerHTML || '';
+        win.document.write(`
+          <!DOCTYPE html>
+          <html><head>
+            <meta charset="UTF-8">
+            <script src="https://cdn.tailwindcss.com"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+            <style>
+              @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+              body { font-family: Inter; margin: 0; padding: 20px; background: white; }
+              @media print { body { margin: 0; padding: 0; } }
+            </style>
+          </head><body>${previewHtml}</body></html>
+        `);
+        win.document.close();
+      }
+    }, 1000);
   };
 
   const handlePrint = async () => {
@@ -167,41 +180,33 @@ const App: React.FC = () => {
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
+        const win = window.open(url);
+        if (win) { win.print(); } else { alert('Abre Pop-ups y vuelva a intentar'); }
         return;
       }
     } catch (err) {
-      console.warn('Server render unavailable');
+      // Silently continue to fallback
     }
     
-    // Fallback: Generate local PDF and open
-    try {
-      const { jsPDF } = await import('jspdf');
-      const html2canvas_import = await import('html2canvas');
-      const html2canvas = html2canvas_import.default;
-      
-      const el = document.getElementById('invoice-preview');
-      if (!el) throw new Error('Preview not found');
-      
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        width: 793,
-        windowWidth: 793
-      });
-      
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-      const imgData = canvas.toDataURL('image/png');
-      const pdfUrl = pdf.output('blob');
-      pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
-      
-      const url = URL.createObjectURL(pdf.output('blob'));
-      window.open(url, '_blank');
-    } catch (err) {
-      console.error('Print error:', err);
-      setShowToast({ msg: "Error al abrir impresión", type: 'error' });
+    // Fallback: Open preview window for printing
+    const win = window.open('', '_blank');
+    if (win) {
+      const previewHtml = document.getElementById('invoice-preview')?.outerHTML || '';
+      win.document.write(`
+        <!DOCTYPE html>
+        <html><head>
+          <meta charset="UTF-8">
+          <script src="https://cdn.tailwindcss.com"></script>
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+            body { font-family: Inter; margin: 0; padding: 20px; background: white; }
+            @media print { body { margin: 0; padding: 0; } }
+          </style>
+        </head><body>${previewHtml}</body></html>
+      `);
+      win.document.close();
+      setTimeout(() => { if (win) win.print(); }, 500);
     }
   };
 
@@ -225,28 +230,7 @@ const App: React.FC = () => {
           throw new Error('Server unavailable');
         }
       } catch (serverErr) {
-        console.warn('Server render unavailable, using local export');
-        // Fallback: Generate local PDF
-        const html2canvas_import = await import('html2canvas');
-        const html2canvas = html2canvas_import.default;
-        const { jsPDF } = await import('jspdf');
-        
-        const el = document.getElementById('invoice-preview');
-        if (!el) throw new Error('Preview not found');
-        
-        const canvas = await html2canvas(el, {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#ffffff',
-          width: 793,
-          windowWidth: 793
-        });
-        
-        const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-        const imgData = canvas.toDataURL('image/png');
-        pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
-        pdfBlob = pdf.output('blob');
+        throw new Error('Función de email solo disponible en producción (Vercel)');
       }
 
       // Convert blob to base64
