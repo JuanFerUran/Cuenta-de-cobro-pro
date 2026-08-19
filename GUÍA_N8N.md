@@ -23,17 +23,29 @@ También crear una credencial de **Telegram** en n8n con el token de BotFather.
 - Conectar la credencial de Telegram
 - Trigger manual para pruebas
 
-### Nodo 2 — Edit Fields (Nombre: Normalizar)
+### Nodo 2 — Edit Fields (Nombre: Extraer datos)
 Crear estas nuevas propiedades a partir del mensaje entrante:
 
 | Propiedad | Expresión |
 |-----------|-----------|
 | `chatId` | `{{ $json.message.chat.id }}` |
 | `messageText` | `{{ $json.message.text || '' }}` |
-| `command` | `{{ ($json.message.text || '').split(' ')[0].toLowerCase() }}` |
-| `isCommand` | `{{ $json.message.text.startsWith('/') }}` |
+| `command` | `{{ ($json.message.text || '').match(/^\\/(\\w+)/i)?.[1]?.toLowerCase() || '' }}` |
+| `commandArgs` | `{{ ($json.message.text || '').replace(/^\\/\\w+\\s*/, '').trim() }}` |
 
-### Nodo 3 — HTTP Request (Nombre: Inbound Check)
+### Nodo 3 — Switch (Nombre: Ruteo de comandos)
+Evaluar `{{ $json.command }}`:
+
+| Rama | Condición | Acción |
+|------|-----------|--------|
+| `/vincular` | `== 'vincular'` | Ir a Nodo 4 (HTTP: Vincular) |
+| `/start` | `== 'start'` | Ir a Nodo 7 (enviar mensaje) |
+| `/ayuda` | `== 'ayuda'` | Ir a Nodo 8 (mensaje de ayuda) |
+| `/cancelar` | `== 'cancelar'` | Ir a Nodo 9 (limpiar estado) |
+| Confirmar | `=~ /confirmar|ok|si|yes/i` | Ir a Nodo 10 (generar PDF) |
+| Datos del cliente | por defecto | Ir a Nodo 6 (procesar con Groq) |
+
+### Nodo 4 — HTTP Request (Nombre: Vincular cuenta)
 - Method: POST
 - URL: `{{ $env.URL_BASE_API }}/api/telegram/inbound`
 - Headers:
@@ -43,38 +55,19 @@ Crear estas nuevas propiedades a partir del mensaje entrante:
 ```json
 {
   "chatId": "={{ $json.chatId }}",
-  "messageText": "={{ $json.messageText }}",
-  "action": "={{ $json.command === '/link' ? 'link' : undefined }}"
+  "messageText": "={{ '/vincular ' + $json.commandArgs }}",
+  "action": "link"
 }
 ```
-- **Continue On Fail: ON** (para capturar errores y mostrarlos al usuario)
+- **Continue On Fail: ON**
 
-### Nodo 4 — Switch (Nombre: Ruteo de comandos)
-Evaluar `{{ $json.command }}`:
+### Nodo 5 — Edit Fields (Nombre: Parsear respuesta vincular)
+Crear estas nuevas propiedades a partir de la respuesta del Nodo 4:
 
-| Rama | Condición | Acción |
-|------|-----------|--------|
-| `/start` o welcome | `== '/start'` | Ir a Nodo 7 (enviar mensaje) |
-| `/ayuda` | `== '/ayuda'` | Ir a Nodo 8 (mensaje de ayuda) |
-| `/vincular` | `== '/vincular'` | Ir a Nodo 5 |
-| `/cancelar` | `== '/cancelar'` | Ir a Nodo 9 (limpiar estado) |
-| Confirmar | `=~ /confirmar|ok|si|yes/i` | Ir a Nodo 10 (generar PDF) |
-| Datos del cliente | por defecto | Ir a Nodo 6 (procesar con Groq) |
-
-### Nodo 5 — HTTP Request (Nombre: Vincular cuenta)
-- Method: POST
-- URL: `{{ $env.URL_BASE_API }}/api/telegram/link`
-- Headers:
-  - `Content-Type: application/json`
-  - `X-Telegram-Bot-Secret: {{ $env.TELEGRAM_BOT_SECRET }}`
-- Body (JSON):
-```json
-{
-  "chatId": "={{ $json.chatId }}",
-  "ownerNombre": "={{ $json.messageText.split(' ').slice(1, -1).join(' ') }}",
-  "ownerDocumento": "={{ $json.messageText.split(' ').pop() }}"
-}
-```
+| Propiedad | Expresión |
+|-----------|-----------|
+| `responseAction` | `{{ $json.action || '' }}` |
+| `responseMessage` | `{{ $json.message || JSON.stringify($json) }}` |
 
 ### Nodo 6 — HTTP Request (Nombre: Extraer datos con Groq)
 - Method: POST
@@ -113,7 +106,6 @@ Evaluar `{{ $json.command }}`:
 ```
 📋 *Cuentas de Cobro AXYRA*
 
-/enviar — generar nueva cuenta
 /vincular <nombre> <documento> — vincular tu cuenta
 /ayuda — este mensaje
 /cancelar — cancelar operación
@@ -126,7 +118,7 @@ Envía los datos en texto libre. Por ejemplo:
 
 ### Nodo 9 — Telegram Send Message (Nombre: Cancelado)
 - Chat ID: `={{ $json.chatId }}`
-- Text: `✅ Operación cancelada. Envía /enviar para generar una nueva cuenta.`
+- Text: `✅ Operación cancelada. Envía los datos del cliente para generar una nueva cuenta.`
 - Parse mode: Markdown
 
 ### Nodo 10 — HTTP Request (Nombre: Asignar número)
@@ -207,6 +199,16 @@ invoiceData.branding.subtotalPosition = "bottom"
 
 ---
 
+## Flujo correcto de /vincular
+
+1. Usuario envía: `/vincular Juan Pérez 12345678`
+2. Nodo 2 extrae: `command = "vincular"`, `commandArgs = "Juan Pérez 12345678"`
+3. Nodo 3 (Switch) detecta `command == 'vincular'` → va al Nodo 4
+4. Nodo 4 llama a `/api/telegram/inbound` con el comando
+5. El endpoint procesa la vinculación en Supabase
+6. La respuesta se parsea en Nodo 5
+7. Se envía confirmación por Telegram
+
 ## Errores comunes que corrigen el prompt de Gemini
 
 | Error en el prompt original | Corrección |
@@ -217,14 +219,16 @@ invoiceData.branding.subtotalPosition = "bottom"
 | No especifica `columnLayout` y `subtotalPosition` en branding | Valores correctos: `"single"` y `"bottom"`. |
 | El body de `assign-invoice-number` espera `lastNumero` | El prompt lo menciona pero no da el formato exacto. Usar `CC-<año>-0000`. |
 | No se maneja `Continue On Fail` | Es crítico en los nodos HTTP para no perder al usuario si falla una API. |
+| El Switch node usa `command` de la respuesta HTTP | **CORRECCIÓN**: El Switch debe evaluar `command` del Nodo 2 (mensaje original), no de la respuesta del HTTP. |
+| El comando se compara como `/vincular` en vez de `vincular` | En el nodo Edit Fields, la expresión extrae solo la parte sin `/`. El Switch compara sin barra. |
 
 ## Orden de prueba (paso a paso)
 
 1. **Crear el workflow** usando el prompt anterior en n8n AI Assistant.
 2. **Probar `/start`** — debe responder el mensaje de bienvenida.
-3. **Probar `/vincular Juan Perez 12345678`** — debe vincular en Supabase.
+3. **Probar `/vincular Juan Perez 12345678`** — debe vincular en Supabase y confirmar.
 4. **Verificar en Supabase** — ir a la tabla `telegram_users` y confirmar la fila.
-5. **Probar `/enviar` con datos fijos** — usar un mensaje como:
+5. **Probar con datos de cliente** — enviar un mensaje como:
    ```
    Cobrar a Juan Garcia NIT 900.123.456 por $1.500.000, prestacion de servicios, banco Bogotá, cuenta ahorros 111-222333
    ```
@@ -245,3 +249,13 @@ El `TELEGRAM_BOT_SECRET` debe ser **el mismo valor** que configuraste en Vercel.
 1. Ir a Vercel Dashboard → tu proyecto → Settings → Environment Variables
 2. Agregar `TELEGRAM_BOT_SECRET` con un valor de al menos 32 caracteres
 3. Redesplegar el proyecto
+
+## Nota sobre el endpoint /api/telegram/inbound
+
+El endpoint ahora procesa **todos los comandos** directamente:
+- `/vincular <nombre> <documento>` → vincula la cuenta
+- `/start` → mensaje de bienvenida
+- `/ayuda` → muestra comandos disponibles
+- Cualquier otro mensaje → se procesa como datos para generar factura
+
+Esto significa que el workflow de n8n puede ser más simple: el Switch node solo necesita detectar el comando y enrutar, y el endpoint se encarga del resto.
