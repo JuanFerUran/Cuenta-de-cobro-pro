@@ -143,7 +143,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Return PDF as base64 for n8n to send
-    const pdfBase64 = pdfBuffer.toString('base64');
+    const pdfBase64 = Buffer.from(pdfBuffer).toString('base64');
 
     res.json({
       success: true,
