@@ -1,6 +1,6 @@
 {
   "buildCommand": "npm run build",
-  "regions": ["sao"],
+  "regions": ["gru1"],
   "functions": {
     "api/**/*.ts": {
       "memory": 1024,
