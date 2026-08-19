@@ -1,117 +1,70 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-interface RequestBody {
-  text: string;
-  documentType?: 'invoice' | 'quotation' | 'proposal';
+const MAX_TEXT_LENGTH = 500;
+const MAX_RESULT_LENGTH = 2000;
+
+function safeString(value: unknown, maxBytes = MAX_TEXT_LENGTH): string {
+  if (typeof value !== 'string') return '';
+  return value.slice(0, maxBytes).trim();
 }
 
-interface ResponseData {
-  success: boolean;
-  result?: string;
-  error?: string;
-}
-
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse<ResponseData>
-): Promise<void> {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
-    res.status(405).json({ success: false, error: 'Method not allowed' });
-    return;
+    return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
+  if (!process.env.GROQ_API_KEY) {
+    return res.status(500).json({ error: 'Servicio de IA no disponible' });
+  }
+
+  const { text, documentType = 'invoice' } = (req.body ?? {}) as { text?: unknown; documentType?: string };
+  const safeText = safeString(text);
+  const safeDocumentType = safeString(documentType, 50);
+
+  if (!safeText || safeText.length < 3) {
+    return res.status(400).json({ error: 'Texto insuficiente para optimizar' });
+  }
+
+  const systemPrompt = `You are a professional billing assistant in Colombia. You optimize invoice descriptions for clarity and legal compliance. Respond in Spanish. Never include pricing information.`;
+  const userPrompt = `Optimize this invoice description for a cuenta de cobro: "${safeText}". Type: ${safeDocumentType}. Return only the optimized text, no quotes.`;
+
   try {
-    const { text, documentType = 'invoice' } = req.body as RequestBody;
-
-    console.log('Request received:', { text: text?.substring(0, 50), documentType });
-
-    if (!text || text.trim().length < 3) {
-      console.log('Text validation failed');
-      res.status(400).json({ 
-        success: false, 
-        error: 'El texto debe tener al menos 3 caracteres' 
-      });
-      return;
-    }
-
-    const apiKey = process.env.GROQ_API_KEY;
-    console.log('API Key check:', apiKey ? 'Present' : 'MISSING');
-    
-    if (!apiKey) {
-      res.status(400).json({ 
-        success: false, 
-        error: 'GROQ_API_KEY no configurada. Agrégala en Vercel Settings → Environment Variables' 
-      });
-      return;
-    }
-
-    const prompts: Record<string, string> = {
-      invoice: `Eres un experto en redacción corporativa colombiana. Mejora esta descripción de CUENTA DE COBRO para que sea formal, profesional y directa (máximo 30 palabras): "${text}"`,
-      quotation: `Eres un experto en redacción comercial colombiana. Mejora esta descripción de COTIZACIÓN para que sea clara, profesional y atractiva (máximo 40 palabras): "${text}"`,
-      proposal: `Eres un experto en redacción de propuestas comerciales. Mejora esta descripción de PROPUESTA para que sea convincente y profesional (máximo 50 palabras): "${text}"`
-    };
-
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.1-70b-versatile',
+        model: 'llama-3.3-70b-versatile',
         messages: [
-          {
-            role: 'system',
-            content: 'Eres un experto en redacción corporativa. Responde de forma concisa y profesional.'
-          },
-          {
-            role: 'user',
-            content: prompts[documentType]
-          }
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
         ],
-        temperature: 0.7,
-        max_tokens: 200,
-      })
+        max_tokens: 500,
+        temperature: 0.3,
+      }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Groq API Error:', errorData);
-      res.status(response.status).json({ 
-        success: false, 
-        error: errorData?.error?.message || `Error: ${response.status}` 
-      });
-      return;
+      const textBody = await response.text().catch(() => '');
+      console.error('[generate-description] Groq error', response.status, textBody);
+      return res.status(response.status).json({ error: 'Error en el proveedor de IA' });
     }
 
-    const data = await response.json();
-    const resultText = data?.choices?.[0]?.message?.content;
+    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const result = data.choices?.[0]?.message?.content;
 
-    if (!resultText) {
-      res.status(500).json({ 
-        success: false, 
-        error: 'No se generó respuesta de la IA' 
-      });
-      return;
+    if (!result) {
+      return res.status(500).json({ error: 'Sin respuesta del modelo' });
     }
 
-    const cleanedResult = resultText
-      .trim()
-      .replace(/^["']|["']$/g, '')
-      .replace(/^\*\*|\*\*$/g, '')
-      .replace(/^#+\s*/gm, '');
-
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      result: cleanedResult
+      result: safeString(result, MAX_RESULT_LENGTH),
     });
-
-  } catch (error: any) {
-    console.error('Generation error:', error);
-    
-    res.status(500).json({
-      success: false,
-      error: error?.message || 'Error al generar descripción'
-    });
+  } catch (err) {
+    console.error('[generate-description] Request error');
+    return res.status(500).json({ error: 'Error de conexión con IA' });
   }
 }

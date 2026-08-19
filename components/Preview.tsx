@@ -1,7 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
 import { AppState } from '../types';
-import exportPreviewAsPdf, { ExportOptions } from '../services/exportDomPdf';
 
 interface Props {
   state: AppState;
@@ -18,7 +16,21 @@ const Preview: React.FC<Props> = ({ state }) => {
     }).format(val);
   };
 
-  // Estilos dinámicos basados en branding
+  const formatDate = (dateStr: string): string => {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr + 'T00:00:00-05:00');
+      return new Intl.DateTimeFormat('es-CO', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+      }).format(date);
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Estilos dinÃ¡micos basados en branding
   const accentColorStyle = { color: branding.accentColor };
   const primaryBgStyle = { backgroundColor: branding.primaryColor };
   const logoBackgroundStyle = { backgroundColor: branding.logoBackground };
@@ -52,16 +64,16 @@ const Preview: React.FC<Props> = ({ state }) => {
 
   return (
     <div id="invoice-preview" style={rootStyle} className="a4-preview flex flex-col font-sans text-slate-800 bg-white mx-auto overflow-hidden relative shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] border border-slate-200 rounded-sm">
-      {/* Línea Superior con color dinámico */}
+      {/* LÃ­nea Superior con color dinÃ¡mico */}
       <div className="h-2 w-full" style={accentBgStyle}></div>
-      
+
       <div className="px-12 py-12 flex justify-between items-start">
         <div className="space-y-4">
           <div className="flex items-center gap-4">
              <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg p-1.5" style={logoBackgroundStyle}>
-                <img 
-                  src={branding.logoUrl} 
-                  alt="Logo" 
+                <img
+                  src={branding.logoUrl}
+                  alt="Logo"
                   className="w-full h-full object-contain"
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = 'none';
@@ -78,7 +90,7 @@ const Preview: React.FC<Props> = ({ state }) => {
             <p><i className="fas fa-map-marker-alt text-slate-300 mr-2"></i> {myData.direccion}</p>
           </div>
         </div>
-        
+
         <div className="text-right">
           <h1 className="text-2xl font-black text-slate-900 uppercase italic">
             {branding.documentTitle} <span style={accentColorStyle}>{branding.documentSubtitle}</span>
@@ -86,15 +98,14 @@ const Preview: React.FC<Props> = ({ state }) => {
           <div className="mt-4 inline-block text-white px-5 py-2 rounded-xl font-black text-xs" style={primaryBgStyle}>
             No. {invoiceDetails.numero}
           </div>
-          <div className="mt-3">
-            <ExportModalTrigger
-              numero={invoiceDetails.numero}
-              onExport={(opts) => exportPreviewAsPdf('invoice-preview', `cuenta-${invoiceDetails.numero}.pdf`, opts)}
-            />
-          </div>
           <div className="mt-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-            Emisión: {invoiceDetails.fechaEmision}
+            EmisiÃ³n: {formatDate(invoiceDetails.fechaEmision)}
           </div>
+          {invoiceDetails.fechaVencimiento && (
+            <div className="mt-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+              Vence: {formatDate(invoiceDetails.fechaVencimiento)}
+            </div>
+          )}
         </div>
       </div>
 
@@ -115,7 +126,7 @@ const Preview: React.FC<Props> = ({ state }) => {
           <table className="w-full text-left">
             <thead>
               <tr className="text-white text-[9px] font-black uppercase tracking-widest" style={primaryBgStyle}>
-                <th className="py-4 px-6">Descripción del Servicio Prestado</th>
+                <th className="py-4 px-6">DescripciÃ³n del Servicio Prestado</th>
                 {branding.subtotalPosition === 'side' && (
                   <th className="py-4 px-6 text-right w-40">Subtotal</th>
                 )}
@@ -124,7 +135,7 @@ const Preview: React.FC<Props> = ({ state }) => {
             <tbody>
               <tr>
                 <td className="py-12 px-6 text-[13px] text-slate-700 leading-relaxed font-semibold bg-white">
-                  {invoiceDetails.concepto || 'Pendiente por definir descripción.'}
+                  {invoiceDetails.concepto || 'Pendiente por definir descripciÃ³n.'}
                 </td>
                 {branding.subtotalPosition === 'side' && (
                   <td className="py-12 px-6 text-right font-black text-xl text-slate-950 bg-slate-50/30">
@@ -142,6 +153,16 @@ const Preview: React.FC<Props> = ({ state }) => {
             </tbody>
           </table>
         </div>
+
+        {/* Observaciones si existen */}
+        {invoiceDetails.observaciones && (
+          <div className="mt-6 px-2">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Observaciones</p>
+            <p className="text-[11px] text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
+              {invoiceDetails.observaciones}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="px-12 pb-12 mt-8">
@@ -154,7 +175,7 @@ const Preview: React.FC<Props> = ({ state }) => {
               <p className="text-[10px] text-slate-500 font-bold">Titular: {bankData.titular}</p>
             </div>
           </div>
-          
+
           <div className="flex flex-col justify-end text-right">
              <div className="mb-6 px-4">
                 <div className="w-full h-[1px] bg-slate-200 mb-3"></div>
@@ -175,149 +196,3 @@ const Preview: React.FC<Props> = ({ state }) => {
 };
 
 export default Preview;
-
-// Simple modal trigger component placed here to avoid new file overhead
-function ExportModalTrigger({
-  numero,
-  onExport
-}: {
-  numero: string | number;
-  onExport: (opts: ExportOptions) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [scale, setScale] = useState<number>(3);
-  const [multipage, setMultipage] = useState<boolean>(true);
-  const [serverRender, setServerRender] = useState<boolean>(true); // Default to true for perfect PDFs
-
-  return (
-    <div>
-      <button
-        onClick={() => setOpen(true)}
-        className="text-[12px] font-bold px-4 py-2 rounded-lg border border-slate-200 bg-white hover:shadow"
-      >
-        Exportar exacto
-      </button>
-
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg p-6 w-[360px]">
-            <h3 className="text-lg font-bold mb-3">Opciones de exportación</h3>
-
-            <div className="mb-4 flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <i className="fas fa-info-circle text-blue-600"></i>
-              <p className="text-xs font-semibold text-blue-700">Se usa Puppeteer para PDF idéntico a la pantalla</p>
-            </div>
-
-            <div className="mb-4 flex items-center gap-3">
-              <input
-                id="server"
-                type="checkbox"
-                checked={serverRender}
-                onChange={(e) => setServerRender(e.target.checked)}
-              />
-              <label htmlFor="server" className="text-sm font-bold">Usar render server (Recomendado) ✓</label>
-            </div>
-
-            {!serverRender && (
-              <>
-                <div className="mb-3">
-                  <label className="block text-sm font-bold mb-1">Resolución (scale)</label>
-                  <select
-                    value={scale}
-                    onChange={(e) => setScale(Number(e.target.value))}
-                    className="w-full border p-2 rounded"
-                  >
-                    <option value={2}>2 (rápido - buena)</option>
-                    <option value={2.5}>2.5 (equilibrado)</option>
-                    <option value={3}>3 (máxima nitidez)</option>
-                  </select>
-                </div>
-
-                <div className="mb-4 flex items-center gap-3">
-                  <input
-                    id="mp"
-                    type="checkbox"
-                    checked={multipage}
-                    onChange={(e) => setMultipage(e.target.checked)}
-                  />
-                  <label htmlFor="mp" className="text-sm font-bold">Permitir multipágina</label>
-                </div>
-              </>
-            )}
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setOpen(false)}
-                className="px-3 py-2 rounded border"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={async () => {
-                  setOpen(false);
-                  if (serverRender) {
-                    // call server API for perfect PDF rendering
-                    try {
-                      const state = localStorage.getItem('axyra_invoice_state_v4');
-                      const res = await fetch('/api/render-pdf', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ state, url: window.location.origin })
-                      });
-                      if (!res.ok) throw new Error('Server render failed');
-                      const blob = await res.blob();
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url; a.download = `cuenta-${numero}.pdf`; document.body.appendChild(a); a.click();
-                      a.remove();
-                      URL.revokeObjectURL(url);
-                    } catch (err) {
-                      // Fallback to local export if server is not available
-                      console.warn('Server render unavailable, using print-preview fallback:', err);
-                      // Open preview window and instruct printing (preserves Tailwind styling)
-                      openPreviewWindowForExport();
-                    }
-                  } else {
-                    // Use preview-print fallback instead of html2canvas to ensure identical styling
-                    openPreviewWindowForExport();
-                  }
-                }}
-                className="px-3 py-2 rounded bg-blue-600 text-white font-bold hover:bg-blue-700"
-              >
-                Exportar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// helper to open a new window with the preview HTML and force print-color-adjust
-function openPreviewWindowForExport() {
-  const win = window.open('', '_blank');
-  if (!win) {
-    alert('Abre ventanas emergentes y vuelve a intentar');
-    return;
-  }
-  const previewHtml = document.getElementById('invoice-preview')?.outerHTML || '';
-  win.document.write(`
-    <!DOCTYPE html>
-    <html><head>
-      <meta charset="UTF-8">
-      <script src="https://cdn.tailwindcss.com"></script>
-      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-      <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
-        body { font-family: Inter; margin: 0; padding: 20px; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
-        .a4-preview, #invoice-preview { -webkit-print-color-adjust: exact !important; background-color: inherit !important; }
-        @media print { body { margin: 0; padding: 0; } .no-print { display: none !important; } }
-      </style>
-    </head><body>${previewHtml}</body></html>
-  `);
-  win.document.close();
-  // Give browser time to load Tailwind then open print dialog
-  setTimeout(() => { try { win.print(); } catch (e) { /* ignore */ } }, 600);
-}

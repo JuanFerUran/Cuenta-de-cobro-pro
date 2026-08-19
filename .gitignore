@@ -10,6 +10,14 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+
+# Environment files (keep example)
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Local overrides (if any)
 *.local
 
 # Editor directories and files

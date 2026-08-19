@@ -1,29 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  DEFAULT_MY_DATA, 
-  DEFAULT_BANK_DATA, 
-  DEFAULT_INVOICE_DETAILS, 
-  DEFAULT_CLIENT_DATA,
-  DEFAULT_BRANDING
-} from './constants';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AppState, AppStatus } from './types';
+import { DEFAULT_MY_DATA, DEFAULT_BANK_DATA, DEFAULT_INVOICE_DETAILS, DEFAULT_CLIENT_DATA, DEFAULT_BRANDING } from './constants';
 import InvoiceForm from './components/InvoiceForm';
 import Preview from './components/Preview';
 import ConfigPanel from './components/ConfigPanel';
-import { generatePDF, downloadPDF, printPDF } from './services/pdfService';
-import { sendEmail } from './services/emailService';
-import exportPreviewAsPdf from './services/exportDomPdf';
+
+/** Check if Supabase persistence is available */
+const isSupabaseConfigured = (): boolean =>
+  typeof process !== 'undefined' && !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem('axyra_invoice_state_v4');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Asegurar que branding existe (para compatibilidad con datos antiguos)
-      return {
-        ...parsed,
-        branding: parsed.branding || DEFAULT_BRANDING
-      };
+    try {
+      const saved = localStorage.getItem('axyra_invoice_state_v4');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          myData: { ...DEFAULT_MY_DATA, ...parsed.myData },
+          clientData: { ...DEFAULT_CLIENT_DATA, ...parsed.clientData },
+          bankData: { ...DEFAULT_BANK_DATA, ...parsed.bankData },
+          invoiceDetails: { ...DEFAULT_INVOICE_DETAILS, ...parsed.invoiceDetails },
+          editMyData: parsed.editMyData ?? false,
+          branding: { ...DEFAULT_BRANDING, ...parsed.branding }
+        };
+      }
+    } catch (e) {
+      console.error('Failed to parse localStorage state:', e);
     }
     return {
       myData: DEFAULT_MY_DATA,
@@ -38,15 +40,44 @@ const App: React.FC = () => {
   const [status, setStatus] = useState<AppStatus>(AppStatus.EDITING);
   const [errors, setErrors] = useState<string[]>([]);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
-  const [showToast, setShowToast] = useState<{msg: string, type: 'success' | 'error' | 'info'} | null>(null);
+  const [showToast, setShowToast] = useState<{msg: string; type: 'success' | 'error' | 'info'} | null>(null);
 
+  // Persist to localStorage (draft/cache only)
   useEffect(() => {
-    localStorage.setItem('axyra_invoice_state_v4', JSON.stringify(state));
+    try {
+      localStorage.setItem('axyra_invoice_state_v4', JSON.stringify(state));
+    } catch (e) {
+      console.error('Failed to save to localStorage:', e);
+    }
   }, [state]);
+
+  // Fetch initial consecutive number from server on mount
+  useEffect(() => {
+    const fetchNextNumber = async () => {
+      try {
+        const res = await fetch('/api/assign-invoice-number', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lastNumero: state.invoiceDetails.numero }),
+        });
+        const data = await res.json();
+        if (data.success && data.numero !== state.invoiceDetails.numero) {
+          setState(prev => ({
+            ...prev,
+            invoiceDetails: { ...prev.invoiceDetails, numero: data.numero }
+          }));
+        }
+      } catch {
+        // Server not available — keep client-side number
+      }
+    };
+    fetchNextNumber();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const validate = (checkEmail = false): boolean => {
     const newErrors: string[] = [];
-    
+
     if (!state.clientData.nombre) newErrors.push("Falta el nombre del cliente.");
     if (!state.clientData.nit) newErrors.push("Falta el NIT/Cédula del cliente.");
     if (checkEmail && !state.clientData.email) newErrors.push("Falta el email del cliente.");
@@ -60,7 +91,7 @@ const App: React.FC = () => {
     if (!state.bankData.numero) newErrors.push("Falta el número de cuenta.");
 
     setErrors(newErrors);
-    
+
     if (newErrors.length > 0) {
       setShowToast({ msg: "Completa los campos marcados", type: 'error' });
       setTimeout(() => setShowToast(null), 3000);
@@ -69,10 +100,10 @@ const App: React.FC = () => {
     return true;
   };
 
-  const handleUpdate = (path: keyof AppState, value: any) => {
+  const handleUpdate = (path: keyof AppState, value: unknown) => {
     setState(prev => ({ ...prev, [path]: value }));
     setStatus(AppStatus.EDITING);
-    if (errors.length > 0) setErrors([]); 
+    if (errors.length > 0) setErrors([]);
   };
 
   const handleClear = () => {
@@ -80,7 +111,7 @@ const App: React.FC = () => {
       setState(prev => ({
         ...prev,
         clientData: DEFAULT_CLIENT_DATA,
-        invoiceDetails: { ...DEFAULT_INVOICE_DETAILS, numero: prev.invoiceDetails.numero }
+        invoiceDetails: { ...prev.invoiceDetails, numero: prev.invoiceDetails.numero }
       }));
       setErrors([]);
       setStatus(AppStatus.EDITING);
@@ -107,7 +138,10 @@ const App: React.FC = () => {
       const data = await response.json();
 
       if (data.success && data.result) {
-        handleUpdate('invoiceDetails', { ...state.invoiceDetails, concepto: data.result.trim() });
+        setState(prev => ({
+          ...prev,
+          invoiceDetails: { ...prev.invoiceDetails, concepto: data.result.trim() }
+        }));
         setShowToast({ msg: "✨ Texto optimizado con IA", type: 'success' });
         setTimeout(() => setShowToast(null), 2000);
       } else {
@@ -121,100 +155,72 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDownload = async () => {
-    if (!validate()) return;
+  const persistInvoice = useCallback(async (action: 'downloaded' | 'sent') => {
+    if (!isSupabaseConfigured()) return;
     try {
-      // Try server-side render first (Vercel Puppeteer only)
-      const res = await fetch('/api/render-pdf', {
+      await fetch('/api/persist-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state, url: window.location.origin })
+        body: JSON.stringify({ state, action }),
       });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `${state.invoiceDetails.numero}.pdf`; document.body.appendChild(a); a.click(); a.remove();
-        URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Persist error:', err);
+    }
+  }, [state]);
+
+  const downloadBlob = async (endpoint: string, filename: string): Promise<boolean> => {
+    if (!validate()) return false;
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state })
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return true;
+    } catch (err) {
+      console.error('Download error:', err);
+      throw err;
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      const ok = await downloadBlob('/api/render-pdf', `${state.invoiceDetails.numero}.pdf`);
+      if (ok) {
+        await persistInvoice('downloaded');
         setShowToast({ msg: 'PDF descargado', type: 'success' });
         setTimeout(() => setShowToast(null), 2500);
-        return;
       }
-    } catch (err) {
-      // Silently continue to fallback
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al generar PDF';
+      setShowToast({ msg, type: 'error' });
     }
-    
-    // Fallback: Open for browser print
-    setShowToast({ msg: 'Presiona Ctrl+P para descargar como PDF', type: 'info' });
-    setTimeout(() => {
-      const win = window.open('', '_blank');
-      if (win) {
-        const previewHtml = document.getElementById('invoice-preview')?.outerHTML || '';
-        win.document.write(`
-          <!DOCTYPE html>
-          <html><head>
-            <meta charset="UTF-8">
-                <script src="https://cdn.tailwindcss.com"></script>
-                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-                <style>
-                  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
-                  body { font-family: Inter; margin: 0; padding: 20px; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-                  /* Force print colors to match screen (helps when browsers skip background graphics) */
-                  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
-                  /* Ensure preview container keeps background colors */
-                  .a4-preview, #invoice-preview { -webkit-print-color-adjust: exact !important; background-color: inherit !important; }
-                  @media print { body { margin: 0; padding: 0; } .no-print { display: none !important; } }
-                </style>
-          </head><body>${previewHtml}</body></html>
-        `);
-        win.document.close();
-      }
-    }, 1000);
   };
 
   const handlePrint = async () => {
-    if (!validate()) return;
     try {
-      // Try server-side render first (Vercel Puppeteer)
-      const res = await fetch('/api/render-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state, url: window.location.origin })
-      });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const win = window.open(url);
-        if (win) { win.print(); } else { alert('Abre Pop-ups y vuelva a intentar'); }
-        return;
-      }
-    } catch (err) {
-      // Silently continue to fallback
-    }
-    
-    // Fallback: Open preview window for printing
-    const win = window.open('', '_blank');
-    if (win) {
-      const previewHtml = document.getElementById('invoice-preview')?.outerHTML || '';
-      win.document.write(`
-        <!DOCTYPE html>
-        <html><head>
-          <meta charset="UTF-8">
-          <script src="https://cdn.tailwindcss.com"></script>
-          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
-            body { font-family: Inter; margin: 0; padding: 20px; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-            /* Force print colors to match screen (helps when browsers skip background graphics) */
-            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
-            /* Ensure preview container keeps background colors */
-            .a4-preview, #invoice-preview { -webkit-print-color-adjust: exact !important; background-color: inherit !important; }
-            @media print { body { margin: 0; padding: 0; } .no-print { display: none !important; } }
-          </style>
-        </head><body>${previewHtml}</body></html>
-      `);
-      win.document.close();
-      setTimeout(() => { if (win) win.print(); }, 500);
+      const ok = await downloadBlob('/api/render-pdf', 'documento.pdf');
+      if (!ok) return;
+      setTimeout(() => window.print(), 500);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al generar PDF';
+      setShowToast({ msg, type: 'error' });
     }
   };
 
@@ -224,24 +230,22 @@ const App: React.FC = () => {
     setStatus(AppStatus.SENDING);
     try {
       let pdfBlob: Blob;
-      
-      // Try server-side render first
+
       try {
         const res = await fetch('/api/render-pdf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ state, url: window.location.origin })
+          body: JSON.stringify({ state })
         });
-        if (res.ok) {
-          pdfBlob = await res.blob();
-        } else {
-          throw new Error('Server unavailable');
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || `HTTP ${res.status}`);
         }
+        pdfBlob = await res.blob();
       } catch (serverErr) {
         throw new Error('Función de email solo disponible en producción (Vercel)');
       }
 
-      // Convert blob to base64
       const reader = new FileReader();
       const b64 = await new Promise<string>((resolve, reject) => {
         reader.onload = () => {
@@ -253,53 +257,73 @@ const App: React.FC = () => {
         reader.readAsDataURL(pdfBlob);
       });
 
-      const response = await sendEmail({
-        to: state.clientData.email,
-        subject: `Cuenta de Cobro ${state.invoiceDetails.numero} - ${state.myData.nombre}`,
-        text: `Buen día,\n\nAdjunto envío la cuenta de cobro No. ${state.invoiceDetails.numero}.\n\nCordialmente,\n${state.myData.nombre}`,
-        filename: `${state.invoiceDetails.numero}.pdf`,
-        pdfBase64: b64
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: state.clientData.email,
+          subject: `Cuenta de Cobro ${state.invoiceDetails.numero} - ${state.myData.nombre}`,
+          text: `Buen día,\n\nAdjunto envío la cuenta de cobro No. ${state.invoiceDetails.numero}.\n\nCordialmente,\n${state.myData.nombre}`,
+          filename: `${state.invoiceDetails.numero}.pdf`,
+          pdfBase64: b64
+        })
       });
 
-      if (response.success) {
+      const result = await response.json();
+
+      if (result.success) {
         setStatus(AppStatus.SENT);
         setShowToast({ msg: "¡Documento enviado al cliente!", type: 'success' });
-        const parts = state.invoiceDetails.numero.split('-');
-        if (parts.length === 3) {
-          const num = parseInt(parts[2]) + 1;
-          const newNum = `${parts[0]}-${parts[1]}-${num.toString().padStart(4, '0')}`;
-          handleUpdate('invoiceDetails', { ...state.invoiceDetails, numero: newNum });
+        await persistInvoice('sent');
+        // Fetch next number from server to avoid stale state
+        try {
+          const numRes = await fetch('/api/assign-invoice-number', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lastNumero: state.invoiceDetails.numero }),
+          });
+          const numData = await numRes.json();
+          if (numData.success) {
+            setState(prev => ({
+              ...prev,
+              invoiceDetails: { ...prev.invoiceDetails, numero: numData.numero }
+            }));
+          }
+        } catch {
+          // Fallback to client-side increment
+          setState(prev => {
+            const parts = prev.invoiceDetails.numero.split('-');
+            let newNum = prev.invoiceDetails.numero;
+            if (parts.length === 3) {
+              const num = parseInt(parts[2], 10) + 1;
+              newNum = `${parts[0]}-${parts[1]}-${num.toString().padStart(4, '0')}`;
+            }
+            return {
+              ...prev,
+              invoiceDetails: { ...prev.invoiceDetails, numero: newNum }
+            };
+          });
         }
       } else {
-        throw new Error(response.message);
+        throw new Error(result.message || 'Error al enviar el correo');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al enviar el correo";
       console.error('Email error:', err);
-      setShowToast({ msg: err.message || "Error al enviar el correo", type: 'error' });
+      setShowToast({ msg, type: 'error' });
       setStatus(AppStatus.ERROR);
     } finally {
       setTimeout(() => setShowToast(null), 6000);
     }
   };
 
-  // helper to convert Uint8Array to base64
-  function bufferToBase64(uint8: Uint8Array) {
-    let binary = '';
-    const chunkSize = 0x8000;
-    for (let i = 0; i < uint8.length; i += chunkSize) {
-      const chunk = uint8.subarray(i, i + chunkSize);
-      binary += String.fromCharCode.apply(null, Array.from(chunk));
-    }
-    return btoa(binary);
-  }
-
   return (
     <div className="min-h-screen flex flex-col bg-[#F1F5F9]">
       {/* Notificaciones */}
       {showToast && (
         <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[300] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/20 backdrop-blur-md ${
-          showToast.type === 'success' ? 'bg-slate-900 text-emerald-400' : 
-          showToast.type === 'error' ? 'bg-rose-600 text-white' : 
+          showToast.type === 'success' ? 'bg-slate-900 text-emerald-400' :
+          showToast.type === 'error' ? 'bg-rose-600 text-white' :
           'bg-blue-600 text-white'
         }`}>
           <i className={`fas ${showToast.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'}`}></i>
@@ -318,7 +342,7 @@ const App: React.FC = () => {
             <p className="text-[9px] font-black text-slate-400 tracking-widest uppercase">Billing CO</p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-4">
            <button onClick={handleClear} className="text-slate-400 hover:text-slate-900 text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2">
              <i className="fas fa-sync-alt"></i> Limpiar Campos
@@ -334,9 +358,9 @@ const App: React.FC = () => {
              <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Configuración del documento</p>
           </div>
 
-          <InvoiceForm 
-            state={state} 
-            onUpdate={handleUpdate} 
+          <InvoiceForm
+            state={state}
+            onUpdate={handleUpdate}
             onClear={handleClear}
             onDownload={handleDownload}
             onPrint={handlePrint}
@@ -358,7 +382,7 @@ const App: React.FC = () => {
                   <div className="w-2 h-2 rounded-full bg-slate-300"></div>
                </div>
             </div>
-            
+
             {/* Efecto Escritorio */}
             <div className="bg-slate-200/50 p-4 lg:p-12 rounded-[2rem] border-4 border-white shadow-2xl overflow-hidden relative">
               <div className="max-h-[75vh] overflow-y-auto scrollbar-hide flex justify-center pb-8">
@@ -377,7 +401,7 @@ const App: React.FC = () => {
         </p>
       </footer>
 
-      <ConfigPanel 
+      <ConfigPanel
         config={state.branding}
         onConfigChange={(branding) => handleUpdate('branding', branding)}
       />

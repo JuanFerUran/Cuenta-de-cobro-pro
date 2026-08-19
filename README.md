@@ -47,5 +47,19 @@ Esta aplicación permite generar documentos de cuenta de cobro profesionales en 
    - **Imprimir**: Abre el diálogo de impresión del navegador.
    - **Enviar Email**: Genera el PDF y lo envía adjunto a la dirección del cliente.
 
+## Bot de Telegram
+Para activar la integración con el bot (@Axyra_IA_Bot):
+
+La guía completa y el prompt para construir el workflow en n8n están en [N8N_PROMPT.md](N8N_PROMPT.md).
+
+1. Configura `TELEGRAM_BOT_SECRET` en Vercel.
+2. Configura la misma clave en n8n como variable `TELEGRAM_BOT_SECRET`.
+3. El bot usa el header `X-Telegram-Bot-Secret:<secreto>` para autenticar llamadas a los endpoints:
+   - `POST /api/telegram/inbound` — recibe mensajes del usuario
+   - `POST /api/telegram/link` — vincula chat_id con identidad del emisor
+   - `POST /api/telegram/generate-invoice` — genera PDF y lo retorna en base64
+4. Rate limiting: 10 documentos por hora por usuario Telegram.
+5. Aplicar la migración `supabase/migrations/20260819_create_invoice_tables.sql` para la tabla `telegram_users`.
+
 ## Seguridad
-Las credenciales SMTP nunca se exponen al navegador. El frontend envía los datos del PDF y el destino a la API serverless, que es la única que tiene acceso a las variables de entorno seguras en el servidor.
+Las credenciales SMTP nunca se exponen al navegador. El frontend envía los datos del PDF y el destino a la API serverless, que es la única que tiene acceso a las variables de entorno seguras en el servidor. Todos los endpoints serverless validan headers de seguridad en producción.
