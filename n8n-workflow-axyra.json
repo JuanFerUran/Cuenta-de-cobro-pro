@@ -1,0 +1,399 @@
+{
+  "name": "AXYRA - Cuentas de Cobro",
+  "id": "axyra-invoice-bot",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "telegram-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [-240, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred-id",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "chatId",
+              "value": "={{ $json.message.chat.id }}"
+            },
+            {
+              "name": "messageText",
+              "value": "={{ $json.message.text || '' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-data",
+      "name": "Extraer Datos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsMode": true,
+        "javascriptCode": "const text = $input.first().json.messageText || '';\nconst match = text.match(/^\\/(\\w+)/i);\nconst command = match ? match[1].toLowerCase() : '';\nconst args = text.replace(/^\\/\\w+\\s*/, '').trim();\nreturn {\n  json: {\n    ...$input.first().json,\n    command,\n    commandArgs: args\n  }\n};"
+      },
+      "id": "parse-command",
+      "name": "Parsear Comando",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "switch",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1.1,
+      "position": [440, 300],
+      "parameters": {
+        "rules": {
+          "string": [
+            {
+              "name": "vincular",
+              "value": "={{ $json.command === 'vincular' }}"
+            },
+            {
+              "name": "start",
+              "value": "={{ $json.command === 'start' || $json.command === '' }}"
+            },
+            {
+              "name": "ayuda",
+              "value": "={{ $json.command === 'ayuda' }}"
+            },
+            {
+              "name": "cancelar",
+              "value": "={{ $json.command === 'cancelar' }}"
+            }
+          ]
+        },
+        "fallbackOutput": {
+          "output": 0,
+          "value": 4
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.URL_BASE_API }}/api/telegram/inbound",
+        "method": "POST",
+        "contentType": "json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Telegram-Bot-Secret",
+              "value": "={{ $env.TELEGRAM_BOT_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chatId\": \"={{ $json.chatId }}\",\n  \"messageText\": \"={{ '/vincular ' + $json.commandArgs }}\",\n  \"action\": \"link\"\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "vincular-api",
+      "name": "Vincular Cuenta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 100],
+      "parameters": {
+        "errorOutput": "lastNode"
+      }
+    },
+    {
+      "parameters": {
+        "fromMessage": "={{ $json.message || '✅ Cuenta vinculada exitosamente! Ya puedes generar cuentas de cobro.' }}",
+        "to": "={{ $json.chatId }}",
+        "options": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "send-vincular",
+      "name": "Enviar Vinculación",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [880, 100],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred-id",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromMessage": "👋 ¡Bienvenido al bot de cuentas de cobro AXYRA!\n\nEnvía /ayuda para ver los comandos disponibles.",
+        "to": "={{ $json.chatId }}",
+        "options": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "send-start",
+      "name": "Enviar Start",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [660, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred-id",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromMessage": "📋 *Cuentas de Cobro AXYRA*\n\n/vincular <nombre> <documento> — vincular tu cuenta\n/ayuda — este mensaje\n/cancelar — cancelar operación\n\n*Generar cuenta:* Envía los datos en texto libre.\nEjemplo:\n\"Cobrar a empresa XYZ NIT 900123456 por $2.500.000, prestación de servicios, banco Bogotá, cuenta ahorros 123-456789\"",
+        "to": "={{ $json.chatId }}",
+        "options": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "send-ayuda",
+      "name": "Enviar Ayuda",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [660, 500],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred-id",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromMessage": "✅ Operación cancelada. Envía los datos del cliente para generar una nueva cuenta.",
+        "to": "={{ $json.chatId }}",
+        "options": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "send-cancel",
+      "name": "Enviar Cancelar",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [660, 700],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred-id",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "method": "POST",
+        "contentType": "json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.GROQ_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0,\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Eres un asistente que extrae datos de cuentas de cobro colombianas. Devuelve SOLO un JSON válido con estas claves: cliente_nombre (string), cliente_nit (string), cliente_email (string, vacio si no hay), concepto (string), valor (number), banco (string), tipo_cuenta (string, Ahorros o Corriente), numero_cuenta (string), titular_cuenta (string), observaciones (string, vacio si no hay). valor debe ser numero, no string. Si falta un dato usa cadena vacia. No inventes datos.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"={{ $json.messageText }}\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "groq-extract",
+      "name": "Extraer con Groq",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 900]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.URL_BASE_API }}/api/assign-invoice-number",
+        "method": "POST",
+        "contentType": "json",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lastNumero\": \"CC-{{ new Date().getFullYear() }}-0000\"\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "assign-number",
+      "name": "Asignar Número",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 900]
+    },
+    {
+      "parameters": {
+        "jsMode": true,
+        "javascriptCode": "const groq = $input.first().json?.data?.choices?.[0]?.message?.content || '{}';\nconst parsed = JSON.parse(groq);\n\nconst invoiceData = {\n  myData: {\n    nombre: '',\n    documento: '',\n    telefono: '',\n    direccion: ''\n  },\n  clientData: {\n    nombre: parsed.cliente_nombre || '',\n    nit: parsed.cliente_nit || '',\n    email: parsed.cliente_email || ''\n  },\n  bankData: {\n    banco: parsed.banco || '',\n    tipo: parsed.tipo_cuenta || 'Ahorros',\n    numero: parsed.numero_cuenta || '',\n    titular: parsed.titular_cuenta || ''\n  },\n  invoiceDetails: {\n    numero: $input.first().json?.numero || '',\n    fechaEmision: new Date().toISOString().split('T')[0],\n    fechaVencimiento: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],\n    concepto: parsed.concepto || '',\n    valor: parsed.valor || 0,\n    observaciones: parsed.observaciones || ''\n  },\n  branding: {\n    documentTitle: 'CUENTA DE COBRO',\n    documentSubtitle: 'Documento equivalente',\n    primaryColor: '#111827',\n    accentColor: '#2563eb',\n    footerText: 'Gracias por su pago',\n    logoUrl: '',\n    logoBackground: '#ffffff',\n    columnLayout: 'single',\n    subtotalPosition: 'bottom'\n  }\n};\n\nreturn {\n  json: {\n    ...$input.first().json,\n    invoiceData,\n    groqResult: parsed\n  }\n};"
+      },
+      "id": "build-invoice",
+      "name": "Construir InvoiceData",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 900]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.URL_BASE_API }}/api/telegram/generate-invoice",
+        "method": "POST",
+        "contentType": "json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Telegram-Bot-Secret",
+              "value": "={{ $env.TELEGRAM_BOT_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chatId\": \"={{ $json.chatId }}\",\n  \"invoiceData\": \"={{ $json.invoiceData }}\"\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "generate-pdf",
+      "name": "Generar PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 900]
+    },
+    {
+      "parameters": {
+        "jsMode": true,
+        "javascriptCode": "const body = $input.first().json;\nreturn {\n  json: {\n    chatId: body.chatId,\n    pdfBase64: body.pdfBase64 || '',\n    filename: body.filename || 'cuenta_cobro.pdf',\n    numero: body.numero || '',\n    success: body.success\n  }\n};"
+      },
+      "id": "extract-pdf",
+      "name": "Extraer PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 900]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ '✅ Cuenta de cobro *' + $json.numero + '* generada correctamente.' }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        },
+        "attachments": [
+          {
+            "name": "={{ $json.filename }}",
+            "content": "={{ $json.pdfBase64 }}"
+          }
+        ]
+      },
+      "id": "send-pdf",
+      "name": "Enviar PDF",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1980, 900],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred-id",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [{ "node": "Extraer Datos", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extraer Datos": {
+      "main": [
+        [{ "node": "Parsear Comando", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parsear Comando": {
+      "main": [
+        [{ "node": "Switch", "type": "main", "index": 0 }]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [{ "node": "Vincular Cuenta", "type": "main", "index": 0 }],
+        [{ "node": "Enviar Start", "type": "main", "index": 0 }],
+        [{ "node": "Enviar Ayuda", "type": "main", "index": 0 }],
+        [{ "node": "Enviar Cancelar", "type": "main", "index": 0 }],
+        [{ "node": "Extraer con Groq", "type": "main", "index": 0 }]
+      ]
+    },
+    "Vincular Cuenta": {
+      "main": [
+        [{ "node": "Enviar Vinculación", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extraer con Groq": {
+      "main": [
+        [{ "node": "Asignar Número", "type": "main", "index": 0 }]
+      ]
+    },
+    "Asignar Número": {
+      "main": [
+        [{ "node": "Construir InvoiceData", "type": "main", "index": 0 }]
+      ]
+    },
+    "Construir InvoiceData": {
+      "main": [
+        [{ "node": "Generar PDF", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generar PDF": {
+      "main": [
+        [{ "node": "Extraer PDF", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extraer PDF": {
+      "main": [
+        [{ "node": "Enviar PDF", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": null
+}
