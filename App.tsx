@@ -1,29 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  DEFAULT_MY_DATA, 
-  DEFAULT_BANK_DATA, 
-  DEFAULT_INVOICE_DETAILS, 
-  DEFAULT_CLIENT_DATA,
-  DEFAULT_BRANDING
-} from './constants';
-import { AppState, AppStatus } from './types';
+import { MyData, BankData, InvoiceDetails, ClientData, BrandingConfig, AppState, AppStatus } from './types';
+import { DEFAULT_MY_DATA, DEFAULT_BANK_DATA, DEFAULT_INVOICE_DETAILS, DEFAULT_CLIENT_DATA, DEFAULT_BRANDING } from './constants';
 import InvoiceForm from './components/InvoiceForm';
 import Preview from './components/Preview';
 import ConfigPanel from './components/ConfigPanel';
-import { generatePDF, downloadPDF, printPDF } from './services/pdfService';
-import { sendEmail } from './services/emailService';
-import exportPreviewAsPdf from './services/exportDomPdf';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem('axyra_invoice_state_v4');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Asegurar que branding existe (para compatibilidad con datos antiguos)
-      return {
-        ...parsed,
-        branding: parsed.branding || DEFAULT_BRANDING
-      };
+    try {
+      const saved = localStorage.getItem('axyra_invoice_state_v4');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Merge with defaults to ensure all fields exist
+        return {
+          myData: { ...DEFAULT_MY_DATA, ...parsed.myData },
+          clientData: { ...DEFAULT_CLIENT_DATA, ...parsed.clientData },
+          bankData: { ...DEFAULT_BANK_DATA, ...parsed.bankData },
+          invoiceDetails: { ...DEFAULT_INVOICE_DETAILS, ...parsed.invoiceDetails },
+          editMyData: parsed.editMyData ?? false,
+          branding: { ...DEFAULT_BRANDING, ...parsed.branding }
+        };
+      }
+    } catch (e) {
+      console.error('Failed to parse localStorage state:', e);
     }
     return {
       myData: DEFAULT_MY_DATA,
@@ -41,12 +40,16 @@ const App: React.FC = () => {
   const [showToast, setShowToast] = useState<{msg: string, type: 'success' | 'error' | 'info'} | null>(null);
 
   useEffect(() => {
-    localStorage.setItem('axyra_invoice_state_v4', JSON.stringify(state));
+    try {
+      localStorage.setItem('axyra_invoice_state_v4', JSON.stringify(state));
+    } catch (e) {
+      console.error('Failed to save to localStorage:', e);
+    }
   }, [state]);
 
   const validate = (checkEmail = false): boolean => {
     const newErrors: string[] = [];
-    
+
     if (!state.clientData.nombre) newErrors.push("Falta el nombre del cliente.");
     if (!state.clientData.nit) newErrors.push("Falta el NIT/Cédula del cliente.");
     if (checkEmail && !state.clientData.email) newErrors.push("Falta el email del cliente.");
@@ -60,7 +63,7 @@ const App: React.FC = () => {
     if (!state.bankData.numero) newErrors.push("Falta el número de cuenta.");
 
     setErrors(newErrors);
-    
+
     if (newErrors.length > 0) {
       setShowToast({ msg: "Completa los campos marcados", type: 'error' });
       setTimeout(() => setShowToast(null), 3000);
@@ -72,7 +75,7 @@ const App: React.FC = () => {
   const handleUpdate = (path: keyof AppState, value: any) => {
     setState(prev => ({ ...prev, [path]: value }));
     setStatus(AppStatus.EDITING);
-    if (errors.length > 0) setErrors([]); 
+    if (errors.length > 0) setErrors([]);
   };
 
   const handleClear = () => {
@@ -107,7 +110,10 @@ const App: React.FC = () => {
       const data = await response.json();
 
       if (data.success && data.result) {
-        handleUpdate('invoiceDetails', { ...state.invoiceDetails, concepto: data.result.trim() });
+        setState(prev => ({
+          ...prev,
+          invoiceDetails: { ...prev.invoiceDetails, concepto: data.result.trim() }
+        }));
         setShowToast({ msg: "✨ Texto optimizado con IA", type: 'success' });
         setTimeout(() => setShowToast(null), 2000);
       } else {
@@ -142,33 +148,12 @@ const App: React.FC = () => {
     } catch (err) {
       // Silently continue to fallback
     }
-    
-    // Fallback: Open for browser print
-    setShowToast({ msg: 'Presiona Ctrl+P para descargar como PDF', type: 'info' });
+
+    // Fallback: Use window.print() instead of document.write (XSS fix)
+    setShowToast({ msg: 'Usa Ctrl+P para imprimir/guardar como PDF', type: 'info' });
     setTimeout(() => {
-      const win = window.open('', '_blank');
-      if (win) {
-        const previewHtml = document.getElementById('invoice-preview')?.outerHTML || '';
-        win.document.write(`
-          <!DOCTYPE html>
-          <html><head>
-            <meta charset="UTF-8">
-                <script src="https://cdn.tailwindcss.com"></script>
-                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-                <style>
-                  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
-                  body { font-family: Inter; margin: 0; padding: 20px; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-                  /* Force print colors to match screen (helps when browsers skip background graphics) */
-                  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
-                  /* Ensure preview container keeps background colors */
-                  .a4-preview, #invoice-preview { -webkit-print-color-adjust: exact !important; background-color: inherit !important; }
-                  @media print { body { margin: 0; padding: 0; } .no-print { display: none !important; } }
-                </style>
-          </head><body>${previewHtml}</body></html>
-        `);
-        win.document.close();
-      }
-    }, 1000);
+      window.print();
+    }, 500);
   };
 
   const handlePrint = async () => {
@@ -183,37 +168,15 @@ const App: React.FC = () => {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const win = window.open(url);
-        if (win) { win.print(); } else { alert('Abre Pop-ups y vuelva a intentar'); }
+        if (win) { win.print(); } else { alert('Abre Pop-ups y vuelve a intentar'); }
         return;
       }
     } catch (err) {
       // Silently continue to fallback
     }
-    
-    // Fallback: Open preview window for printing
-    const win = window.open('', '_blank');
-    if (win) {
-      const previewHtml = document.getElementById('invoice-preview')?.outerHTML || '';
-      win.document.write(`
-        <!DOCTYPE html>
-        <html><head>
-          <meta charset="UTF-8">
-          <script src="https://cdn.tailwindcss.com"></script>
-          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
-            body { font-family: Inter; margin: 0; padding: 20px; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-            /* Force print colors to match screen (helps when browsers skip background graphics) */
-            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
-            /* Ensure preview container keeps background colors */
-            .a4-preview, #invoice-preview { -webkit-print-color-adjust: exact !important; background-color: inherit !important; }
-            @media print { body { margin: 0; padding: 0; } .no-print { display: none !important; } }
-          </style>
-        </head><body>${previewHtml}</body></html>
-      `);
-      win.document.close();
-      setTimeout(() => { if (win) win.print(); }, 500);
-    }
+
+    // Fallback: Use window.print() instead of document.write (XSS fix)
+    window.print();
   };
 
   const handleSendEmail = async () => {
@@ -249,28 +212,38 @@ const App: React.FC = () => {
         reader.readAsDataURL(pdfBlob);
       });
 
-      const response = await sendEmail({
-        to: state.clientData.email,
-        subject: `Cuenta de Cobro ${state.invoiceDetails.numero} - ${state.myData.nombre}`,
-        text: `Buen día,\n\nAdjunto envío la cuenta de cobro No. ${state.invoiceDetails.numero}.\n\nCordialmente,\n${state.myData.nombre}`,
-        filename: `${state.invoiceDetails.numero}.pdf`,
-        pdfBase64: b64
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: state.clientData.email,
+          subject: `Cuenta de Cobro ${state.invoiceDetails.numero} - ${state.myData.nombre}`,
+          text: `Buen día,\n\nAdjunto envío la cuenta de cobro No. ${state.invoiceDetails.numero}.\n\nCordialmente,\n${state.myData.nombre}`,
+          filename: `${state.invoiceDetails.numero}.pdf`,
+          pdfBase64: b64
+        })
       });
 
-      if (response.success) {
+      const result = await response.json();
+
+      if (result.success) {
         setStatus(AppStatus.SENT);
         setShowToast({ msg: "¡Documento enviado al cliente!", type: 'success' });
-        const parts = state.invoiceDetails.numero.split('-');
-        if (parts.length === 3) {
-          const num = parseInt(parts[2]) + 1;
-          const newNum = `${parts[0]}-${parts[1]}-${num.toString().padStart(4, '0')}`;
-          setState(prev => ({
+        // Increment with prevState to avoid stale state
+        setState(prev => {
+          const parts = prev.invoiceDetails.numero.split('-');
+          let newNum = prev.invoiceDetails.numero;
+          if (parts.length === 3) {
+            const num = parseInt(parts[2]) + 1;
+            newNum = `${parts[0]}-${parts[1]}-${num.toString().padStart(4, '0')}`;
+          }
+          return {
             ...prev,
             invoiceDetails: { ...prev.invoiceDetails, numero: newNum }
-          }));
-        }
+          };
+        });
       } else {
-        throw new Error(response.message);
+        throw new Error(result.message || 'Error al enviar el correo');
       }
     } catch (err: any) {
       console.error('Email error:', err);
@@ -281,24 +254,13 @@ const App: React.FC = () => {
     }
   };
 
-  // helper to convert Uint8Array to base64
-  function bufferToBase64(uint8: Uint8Array) {
-    let binary = '';
-    const chunkSize = 0x8000;
-    for (let i = 0; i < uint8.length; i += chunkSize) {
-      const chunk = uint8.subarray(i, i + chunkSize);
-      binary += String.fromCharCode.apply(null, Array.from(chunk));
-    }
-    return btoa(binary);
-  }
-
   return (
     <div className="min-h-screen flex flex-col bg-[#F1F5F9]">
       {/* Notificaciones */}
       {showToast && (
         <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[300] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/20 backdrop-blur-md ${
-          showToast.type === 'success' ? 'bg-slate-900 text-emerald-400' : 
-          showToast.type === 'error' ? 'bg-rose-600 text-white' : 
+          showToast.type === 'success' ? 'bg-slate-900 text-emerald-400' :
+          showToast.type === 'error' ? 'bg-rose-600 text-white' :
           'bg-blue-600 text-white'
         }`}>
           <i className={`fas ${showToast.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'}`}></i>
@@ -317,7 +279,7 @@ const App: React.FC = () => {
             <p className="text-[9px] font-black text-slate-400 tracking-widest uppercase">Billing CO</p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-4">
            <button onClick={handleClear} className="text-slate-400 hover:text-slate-900 text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2">
              <i className="fas fa-sync-alt"></i> Limpiar Campos
@@ -333,9 +295,9 @@ const App: React.FC = () => {
              <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Configuración del documento</p>
           </div>
 
-          <InvoiceForm 
-            state={state} 
-            onUpdate={handleUpdate} 
+          <InvoiceForm
+            state={state}
+            onUpdate={handleUpdate}
             onClear={handleClear}
             onDownload={handleDownload}
             onPrint={handlePrint}
@@ -357,7 +319,7 @@ const App: React.FC = () => {
                   <div className="w-2 h-2 rounded-full bg-slate-300"></div>
                </div>
             </div>
-            
+
             {/* Efecto Escritorio */}
             <div className="bg-slate-200/50 p-4 lg:p-12 rounded-[2rem] border-4 border-white shadow-2xl overflow-hidden relative">
               <div className="max-h-[75vh] overflow-y-auto scrollbar-hide flex justify-center pb-8">
@@ -376,7 +338,7 @@ const App: React.FC = () => {
         </p>
       </footer>
 
-      <ConfigPanel 
+      <ConfigPanel
         config={state.branding}
         onConfigChange={(branding) => handleUpdate('branding', branding)}
       />
