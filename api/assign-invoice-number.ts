@@ -63,32 +63,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Atomic: SELECT FOR UPDATE + increment in one transaction
-    const { data: counterRow, error: selectError } = await supabase
-      .from('invoice_counters')
-      .select('counter')
-      .eq('year', year)
-      .single();
+    // The database function increments and returns the counter in one transaction.
+    const { data: nextNum, error: counterError } = await supabase
+      .rpc('next_invoice_counter', { counter_year: year });
 
-    if (selectError) {
-      console.error('[assign-invoice-number] select error:', selectError);
-      return fail(res, 'Failed to read counter', 500);
+    if (counterError || typeof nextNum !== 'number') {
+      console.error('[assign-invoice-number] counter error:', counterError);
+      return fail(res, 'Failed to increment counter. Apply the latest Supabase migration and verify SUPABASE_SERVICE_ROLE_KEY.', 500);
     }
 
-    const nextNum = (counterRow?.counter ?? 0) + 1;
     const padded = nextNum.toString().padStart(4, '0');
     const newNumero = `${prefix}-${yearStr}-${padded}`;
-
-    // Atomic update
-    const { error: updateError } = await supabase
-      .from('invoice_counters')
-      .update({ counter: nextNum })
-      .eq('year', year);
-
-    if (updateError) {
-      console.error('[assign-invoice-number] update error:', updateError);
-      return fail(res, 'Failed to increment counter', 500);
-    }
 
     res.json({ success: true, numero: newNumero });
   } catch (err) {

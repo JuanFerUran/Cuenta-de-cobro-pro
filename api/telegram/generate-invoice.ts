@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
-import { buildInvoiceHtml } from '../../services/invoiceTemplate';
+import { buildInvoiceHtml } from '../../services/invoiceTemplate.js';
 import type { AppState } from '../../types';
 
 // Rate limiting: in-memory map, cleared on function restart (acceptable for Telegram)

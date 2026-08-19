@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
-import { buildInvoiceHtml } from '../services/invoiceTemplate';
+import { buildInvoiceHtml } from '../services/invoiceTemplate.js';
 import type { AppState } from '../types';
 
 function buildRenderError(message: string, status = 500): string {
