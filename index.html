@@ -1,0 +1,64 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AXYRA | Cuentas de Cobro Profesionales</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/logo.png">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS Overrides (loads after Tailwind) -->
+    <link rel="stylesheet" href="/index.css">
+    
+    <!-- Google Fonts -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body, #root {
+            width: 100%;
+            height: 100%;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        /* Ensure A4 preview is rendered at correct dimensions when needed */
+        .a4-preview {
+            width: 210mm;
+            height: auto;
+            background: white;
+            color: #1e293b;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        
+        /* PNG compression for HTML2Canvas export */
+        canvas {
+            image-rendering: crisp-edges;
+            image-rendering: -webkit-optimize-contrast;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>
