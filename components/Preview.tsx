@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { AppState } from '../types';
-import exportPreviewAsPdf, { ExportOptions } from '../services/exportDomPdf';
 
 interface Props {
   state: AppState;

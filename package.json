@@ -10,14 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^149.0.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@vercel/node": "^5.5.27",
+    "nodemailer": "^7.0.12",
+    "puppeteer-core": "^25.8.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "jspdf": "^4.0.0",
-    "html2canvas": "^1.4.1",
-    "puppeteer-core": "^10.1.0",
-    "chrome-aws-lambda": "^10.1.0",
-    "nodemailer": "^7.0.12",
-    "@vercel/node": "^5.5.27"
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

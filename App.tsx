@@ -11,7 +11,6 @@ const App: React.FC = () => {
       const saved = localStorage.getItem('axyra_invoice_state_v4');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Merge with defaults to ensure all fields exist
         return {
           myData: { ...DEFAULT_MY_DATA, ...parsed.myData },
           clientData: { ...DEFAULT_CLIENT_DATA, ...parsed.clientData },
@@ -83,7 +82,7 @@ const App: React.FC = () => {
       setState(prev => ({
         ...prev,
         clientData: DEFAULT_CLIENT_DATA,
-        invoiceDetails: { ...DEFAULT_INVOICE_DETAILS, numero: prev.invoiceDetails.numero }
+        invoiceDetails: { ...prev.invoiceDetails, numero: prev.invoiceDetails.numero }
       }));
       setErrors([]);
       setStatus(AppStatus.EDITING);
@@ -127,56 +126,58 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDownload = async () => {
-    if (!validate()) return;
+  const downloadBlob = async (endpoint: string, filename: string): Promise<boolean> => {
+    if (!validate()) return false;
+
     try {
-      const res = await fetch('/api/render-pdf', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ state })
       });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `${state.invoiceDetails.numero}.pdf`; document.body.appendChild(a); a.click(); a.remove();
-        URL.revokeObjectURL(url);
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return true;
+    } catch (err) {
+      console.error('Download error:', err);
+      throw err;
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      const ok = await downloadBlob('/api/render-pdf', `${state.invoiceDetails.numero}.pdf`);
+      if (ok) {
         setShowToast({ msg: 'PDF descargado', type: 'success' });
         setTimeout(() => setShowToast(null), 2500);
-        return;
       }
-    } catch (err) {
-      // Silently continue to fallback
+    } catch (err: any) {
+      setShowToast({ msg: err.message || 'Error al generar PDF', type: 'error' });
     }
-
-    // Fallback: Use window.print() instead of document.write (XSS fix)
-    setShowToast({ msg: 'Usa Ctrl+P para imprimir/guardar como PDF', type: 'info' });
-    setTimeout(() => {
-      window.print();
-    }, 500);
   };
 
   const handlePrint = async () => {
-    if (!validate()) return;
     try {
-      const res = await fetch('/api/render-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state })
-      });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const win = window.open(url);
-        if (win) { win.print(); } else { alert('Abre Pop-ups y vuelve a intentar'); }
-        return;
-      }
-    } catch (err) {
-      // Silently continue to fallback
+      const ok = await downloadBlob('/api/render-pdf', 'documento.pdf');
+      if (!ok) return;
+      // Trigger print after download
+      setTimeout(() => window.print(), 500);
+    } catch (err: any) {
+      setShowToast({ msg: err.message || 'Error al generar PDF', type: 'error' });
     }
-
-    // Fallback: Use window.print() instead of document.write (XSS fix)
-    window.print();
   };
 
   const handleSendEmail = async () => {
@@ -192,11 +193,11 @@ const App: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ state })
         });
-        if (res.ok) {
-          pdfBlob = await res.blob();
-        } else {
-          throw new Error('Server unavailable');
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || `HTTP ${res.status}`);
         }
+        pdfBlob = await res.blob();
       } catch (serverErr) {
         throw new Error('Función de email solo disponible en producción (Vercel)');
       }
