@@ -69,7 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Handle /link command
   if (action === 'link' && messageText) {
     const parts = messageText.trim().split(/\s+/);
-    if (parts.length < 2) {
+    if (parts.length < 3) {
       return res.json({
         success: true,
         action: 'error',
@@ -77,12 +77,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const ownerNombre = `${parts[0]} ${parts.slice(1).join(' ')}`.trim();
     const ownerDocumento = parts[parts.length - 1];
+    const ownerNombre = parts.slice(1, -1).join(' ').trim();
+
+    if (!ownerNombre || !ownerDocumento) {
+      return res.json({
+        success: true,
+        action: 'error',
+        message: 'Formato incorrecto. Usa: /vincular <nombre> <documento>',
+      });
+    }
 
     // Call the link endpoint
     try {
-      const linkRes = await fetch(`${process.env.VERCEL_URL || 'http://localhost:3000'}/api/telegram/link`, {
+      const baseUrl = process.env.APP_URL
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+      const linkRes = await fetch(`${baseUrl}/api/telegram/link`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

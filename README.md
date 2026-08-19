@@ -50,6 +50,8 @@ Esta aplicación permite generar documentos de cuenta de cobro profesionales en 
 ## Bot de Telegram
 Para activar la integración con el bot (@Axyra_IA_Bot):
 
+La guía completa y el prompt para construir el workflow en n8n están en [N8N_PROMPT.md](N8N_PROMPT.md).
+
 1. Configura `TELEGRAM_BOT_SECRET` en Vercel.
 2. Configura la misma clave en n8n como variable `TELEGRAM_BOT_SECRET`.
 3. El bot usa el header `X-Telegram-Bot-Secret:<secreto>` para autenticar llamadas a los endpoints:
