@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { MyData, BankData, InvoiceDetails, ClientData, BrandingConfig, AppState, AppStatus } from './types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { AppState, AppStatus } from './types';
 import { DEFAULT_MY_DATA, DEFAULT_BANK_DATA, DEFAULT_INVOICE_DETAILS, DEFAULT_CLIENT_DATA, DEFAULT_BRANDING } from './constants';
 import InvoiceForm from './components/InvoiceForm';
 import Preview from './components/Preview';
 import ConfigPanel from './components/ConfigPanel';
+
+/** Check if Supabase persistence is available */
+const isSupabaseConfigured = (): boolean =>
+  typeof process !== 'undefined' && !!process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
@@ -36,8 +40,9 @@ const App: React.FC = () => {
   const [status, setStatus] = useState<AppStatus>(AppStatus.EDITING);
   const [errors, setErrors] = useState<string[]>([]);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
-  const [showToast, setShowToast] = useState<{msg: string, type: 'success' | 'error' | 'info'} | null>(null);
+  const [showToast, setShowToast] = useState<{msg: string; type: 'success' | 'error' | 'info'} | null>(null);
 
+  // Persist to localStorage (draft/cache only)
   useEffect(() => {
     try {
       localStorage.setItem('axyra_invoice_state_v4', JSON.stringify(state));
@@ -45,6 +50,30 @@ const App: React.FC = () => {
       console.error('Failed to save to localStorage:', e);
     }
   }, [state]);
+
+  // Fetch initial consecutive number from server on mount
+  useEffect(() => {
+    const fetchNextNumber = async () => {
+      try {
+        const res = await fetch('/api/assign-invoice-number', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lastNumero: state.invoiceDetails.numero }),
+        });
+        const data = await res.json();
+        if (data.success && data.numero !== state.invoiceDetails.numero) {
+          setState(prev => ({
+            ...prev,
+            invoiceDetails: { ...prev.invoiceDetails, numero: data.numero }
+          }));
+        }
+      } catch {
+        // Server not available — keep client-side number
+      }
+    };
+    fetchNextNumber();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const validate = (checkEmail = false): boolean => {
     const newErrors: string[] = [];
@@ -71,7 +100,7 @@ const App: React.FC = () => {
     return true;
   };
 
-  const handleUpdate = (path: keyof AppState, value: any) => {
+  const handleUpdate = (path: keyof AppState, value: unknown) => {
     setState(prev => ({ ...prev, [path]: value }));
     setStatus(AppStatus.EDITING);
     if (errors.length > 0) setErrors([]);
@@ -126,6 +155,19 @@ const App: React.FC = () => {
     }
   };
 
+  const persistInvoice = useCallback(async (action: 'downloaded' | 'sent') => {
+    if (!isSupabaseConfigured()) return;
+    try {
+      await fetch('/api/persist-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, action }),
+      });
+    } catch (err) {
+      console.error('Persist error:', err);
+    }
+  }, [state]);
+
   const downloadBlob = async (endpoint: string, filename: string): Promise<boolean> => {
     if (!validate()) return false;
 
@@ -161,11 +203,13 @@ const App: React.FC = () => {
     try {
       const ok = await downloadBlob('/api/render-pdf', `${state.invoiceDetails.numero}.pdf`);
       if (ok) {
+        await persistInvoice('downloaded');
         setShowToast({ msg: 'PDF descargado', type: 'success' });
         setTimeout(() => setShowToast(null), 2500);
       }
-    } catch (err: any) {
-      setShowToast({ msg: err.message || 'Error al generar PDF', type: 'error' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al generar PDF';
+      setShowToast({ msg, type: 'error' });
     }
   };
 
@@ -173,10 +217,10 @@ const App: React.FC = () => {
     try {
       const ok = await downloadBlob('/api/render-pdf', 'documento.pdf');
       if (!ok) return;
-      // Trigger print after download
       setTimeout(() => window.print(), 500);
-    } catch (err: any) {
-      setShowToast({ msg: err.message || 'Error al generar PDF', type: 'error' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al generar PDF';
+      setShowToast({ msg, type: 'error' });
     }
   };
 
@@ -230,25 +274,43 @@ const App: React.FC = () => {
       if (result.success) {
         setStatus(AppStatus.SENT);
         setShowToast({ msg: "¡Documento enviado al cliente!", type: 'success' });
-        // Increment with prevState to avoid stale state
-        setState(prev => {
-          const parts = prev.invoiceDetails.numero.split('-');
-          let newNum = prev.invoiceDetails.numero;
-          if (parts.length === 3) {
-            const num = parseInt(parts[2]) + 1;
-            newNum = `${parts[0]}-${parts[1]}-${num.toString().padStart(4, '0')}`;
+        await persistInvoice('sent');
+        // Fetch next number from server to avoid stale state
+        try {
+          const numRes = await fetch('/api/assign-invoice-number', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lastNumero: state.invoiceDetails.numero }),
+          });
+          const numData = await numRes.json();
+          if (numData.success) {
+            setState(prev => ({
+              ...prev,
+              invoiceDetails: { ...prev.invoiceDetails, numero: numData.numero }
+            }));
           }
-          return {
-            ...prev,
-            invoiceDetails: { ...prev.invoiceDetails, numero: newNum }
-          };
-        });
+        } catch {
+          // Fallback to client-side increment
+          setState(prev => {
+            const parts = prev.invoiceDetails.numero.split('-');
+            let newNum = prev.invoiceDetails.numero;
+            if (parts.length === 3) {
+              const num = parseInt(parts[2], 10) + 1;
+              newNum = `${parts[0]}-${parts[1]}-${num.toString().padStart(4, '0')}`;
+            }
+            return {
+              ...prev,
+              invoiceDetails: { ...prev.invoiceDetails, numero: newNum }
+            };
+          });
+        }
       } else {
         throw new Error(result.message || 'Error al enviar el correo');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al enviar el correo";
       console.error('Email error:', err);
-      setShowToast({ msg: err.message || "Error al enviar el correo", type: 'error' });
+      setShowToast({ msg, type: 'error' });
       setStatus(AppStatus.ERROR);
     } finally {
       setTimeout(() => setShowToast(null), 6000);
